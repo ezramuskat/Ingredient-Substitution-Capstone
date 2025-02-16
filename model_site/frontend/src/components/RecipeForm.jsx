@@ -1,7 +1,8 @@
 import { useState } from "react";
 
-function RecipeForm() {
+function RecipeForm(props) {
   const [ingredients, setIngredients] = useState([""]);
+  const [restrictions, setRestrictions] = useState([""]); //actually handle these
 
   const addIngredient = () => {
     setIngredients([...ingredients, ""]);
@@ -15,6 +16,18 @@ function RecipeForm() {
 
   const handleSubmit = () => {
 	// TODO: this needs to be updated to send the data to the backend
+	  props.submitFunc()
+    fetch('/api/processed-recipe', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ingredients: ingredients,
+        restrictions: restrictions,
+      })
+    })
     console.log("Submitted Data:", ingredients);
   };
 

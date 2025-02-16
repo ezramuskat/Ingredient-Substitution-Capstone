@@ -3,14 +3,18 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import RecipeForm from './components/RecipeForm'
+import SubstitutedRecipe from './components/SubstitutedRecipe'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+
+  function submitFunc() {
+    console.log("Marking as submitted")
+    setIsSubmitted(true)
+  }
 
   return (
-    <>
-      <RecipeForm />
-    </>
+      isSubmitted ?  <SubstitutedRecipe /> : <RecipeForm submitFunc={submitFunc}/>
   )
 }
 
