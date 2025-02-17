@@ -1,3 +1,4 @@
 .DS_Store
 data_exploration_private/
 data_sources/
+.venv/
