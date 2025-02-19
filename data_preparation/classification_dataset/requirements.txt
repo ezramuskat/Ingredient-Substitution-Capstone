@@ -1,0 +1,8 @@
+pandas
+numpy
+matplotlib
+
+ipykernel
+
+kagglehub
+openpyxl
