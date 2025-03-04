@@ -5,3 +5,6 @@ scikit-learn
 seaborn
 
 gensim
+nltk
+
+BERTSimilar
