@@ -8,3 +8,8 @@ gensim
 nltk
 
 BERTSimilar
+transformers
+
+torch
+
+tqdm
