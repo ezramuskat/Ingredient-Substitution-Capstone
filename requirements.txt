@@ -1,0 +1,20 @@
+# General ML Packages
+pandas==2.2.3
+numpy==1.26.4
+matplotlib==3.10.0
+scikit-learn==1.6.1
+seaborn==0.13.2
+
+# NLP Libraries
+gensim==4.3.3
+nltk==3.9.1
+
+# Libraries for BERT
+BERTSimilar==0.2.3
+transformers==4.49.0
+
+# NN Libraries
+torch==2.6.0
+
+# Misc.
+tqdm==4.67.1
