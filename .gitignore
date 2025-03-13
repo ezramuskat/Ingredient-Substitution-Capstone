@@ -2,3 +2,4 @@
 data_exploration_private/
 data_sources/
 .venv/
+__pycache__/
