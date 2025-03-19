@@ -8,14 +8,26 @@ function RecipeForm(props) {
     setIngredients([...ingredients, ""]);
   };
 
-  const handleChange = (index, value) => {
+  const handleIngredientsChange = (index, value) => {
     const newIngredients = [...ingredients];
     newIngredients[index] = value;
     setIngredients(newIngredients);
   };
 
+  const handleCheckboxChange = (event) => {
+    const { value, checked } = event.target;
+    if (checked) {
+      if (restrictions[0] === "") {
+        setRestrictions([value]);
+      } else {
+        setRestrictions((prev) => [...prev, value]);
+      }
+    } else {
+      setRestrictions((prev) => prev.filter((item) => item !== value));
+    }
+  };
+
   const handleSubmit = () => {
-	// TODO: this needs to be updated to send the data to the backend
 	  props.submitFunc()
     fetch('/api/processed-recipe', {
       method: 'POST',
@@ -34,10 +46,18 @@ function RecipeForm(props) {
   return (
     <div className="recipe-form-flex-space">
       <div className="restrictions-container">
-	  		<input type="checkbox" value={"option1"}/>
-            <input type="checkbox" value={"option2"}/>
-            <input type="checkbox" value={"option3"}/>
-            <input type="checkbox" value={"option4"}/>
+	  		<label>
+          <input type="checkbox" value="vegan" onChange={handleCheckboxChange} />
+          Vegan
+        </label>
+        <label>
+          <input type="checkbox" value="vegetarian" onChange={handleCheckboxChange} />
+          Vegetarian
+        </label>
+        <label>
+          <input type="checkbox" value="option3" onChange={handleCheckboxChange} />
+          Option 3
+        </label>
       </div>
 
       <div className="ingredients-container">
@@ -45,7 +65,7 @@ function RecipeForm(props) {
           <div key={index} className="ingredient-row">
             <input
               value={text}
-              onChange={(e) => handleChange(index, e.target.value)}
+              onChange={(e) => handleIngredientsChange(index, e.target.value)}
             />
             {index === ingredients.length - 1 && (
               <button onClick={addIngredient}>+</button>
