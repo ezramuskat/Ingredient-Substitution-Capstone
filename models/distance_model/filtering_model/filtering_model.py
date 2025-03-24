@@ -8,6 +8,10 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from sklearn.model_selection import train_test_split
 
+from collections import OrderedDict
+
+#from sdv.metadata import SingleTableMetadata
+#from sdv.single_table import CTGANSynthesizer
 
 class FilteringModel(object):
 
@@ -17,31 +21,46 @@ class FilteringModel(object):
   #   This can also be used to load local models with the prefix ./
   #   This is functionally the same to the first paramater in transformers.AutoConfig.from_pretrained() and transformers.AutoTokenizer.from_pretrained()
   #Model is a pytorch model which will predict embedding classifications.
-  def __init__(self, references:DataFrame, token_column_name:str, embedding_model_name:str, model:nn.Module):
+  def __init__(self, references:DataFrame, token_column_name:str="ingredient",
+      embedding_model_name:str="sentence-transformers/all-MiniLM-L6-v2",
+      model:nn.Module=nn.Sequential(OrderedDict([
+          ('fc1', nn.Linear(768, 256)),
+          ('relu1', nn.LeakyReLU()),
+          ('bn1', nn.BatchNorm1d(256)),
+          ('fc2', nn.Linear(256, 64)),
+          ('dr1', nn.Dropout(0.3)),
+          ('relu2', nn.LeakyReLU()),
+          ('bn2', nn.BatchNorm1d(64)),
+          ('fc3', nn.Linear(64, 4)),
+          ('sg1', nn.Sigmoid())
+          ])),trust_remote_code=True):
+    #Copy references to make sure we don't accidentally override the original
+    references = references.copy()
+
+    #Publicly declare model and tokenizer
+    self.tokenizer = AutoTokenizer.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
+    self.embedding_model = AutoModel.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
+
+    #Tokenize and process reference data
+    #This will be used as X in classification
+    self.reference_embeddings = self.__batch_embed(references[token_column_name].tolist())
+    
     #Make reference and token_column_name data public
     self.references = references
     self.token_column_name = token_column_name
 
     #Create a tensor of 1 where references is labeled 'yes' and 0 where it is labeled no
-    #This will be used to aid classification
+    #This will be used as y in classification
     reference_bool_df = references.drop(token_column_name,axis=1)
     reference_int_df = (reference_bool_df.where(reference_bool_df != 'yes',1)
         .where(reference_bool_df != 'no',0)
         .where(reference_bool_df.isin(['yes','no']),0)
-        .astype('float32'))
+        .astype('int'))
     reference_filter_map = T.tensor(reference_int_df.values, dtype=T.float32)
     self.reference_filter_map = reference_filter_map
 
-    #Publicly declare model and tokenizer
-    self.tokenizer = AutoTokenizer.from_pretrained(embedding_model_name)
-    self.embedding_model = AutoModel.from_pretrained(embedding_model_name)
-
-    #Tokenize and process reference data
-    self.reference_embeddings = self.__batch_embed(references[token_column_name].tolist())
-
     #Make the model public
     self.model = model
-
 
   #Credit to https://huggingface.co/thenlper/gte-base
   def __average_pool(self, last_hidden_states: Tensor,
@@ -60,16 +79,17 @@ class FilteringModel(object):
     return embeddings
   
   #Convert the classified data into a dataframe
-  def __get_classification_df(self, tokens:list, classifications:Tensor) -> DataFrame:
+  def __get_classification_df(self, tokens:list, classifications:Tensor, bool_format=True) -> DataFrame:
     result = DataFrame(classifications)
     result.insert(0,"_",tokens)
-    result = result.where(result != 0,'no').where(result != 1,'yes')
+    result = result.where(result != 0,'no').where(result != 1,'yes') if bool_format else result
     result.columns = self.references.columns
-    return result 
+    return result
 
   def train_model(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
-      val_split:float=0.1,batch_size:int=32,lr:float=0.001):
-
+      val_split:float=0.1,batch_size:int=32,lr:float=0.001,
+      verbose:bool=True):
+    
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
     self.model.to(device)
 
@@ -93,6 +113,8 @@ class FilteringModel(object):
       #Train
       self.model.train()
       train_loss = 0
+      train_count = 0
+      train_correct = 0
       for idx, (batch_X, batch_y) in enumerate(train_loader):
         batch_X, batch_y = batch_X.to(device), batch_y.to(device)
 
@@ -105,6 +127,11 @@ class FilteringModel(object):
         optimizer.step()
 
         optimizer.zero_grad() 
+        
+        #For getting train accuracy
+        pred = self.model(batch_X)
+        train_count += batch_X.shape[0]
+        train_correct += T.where((pred - batch_y).abs() >= 0.5, 0, 1).sum()
 
       #Validate
       self.model.eval()
@@ -112,22 +139,85 @@ class FilteringModel(object):
       val_count = 0
       val_correct = 0
       for batch_X, batch_y in val_loader:
-        for batch_X, batch_y in val_loader:
-          pred = self.model(batch_X)
-          val_count += batch_X.shape[0]
-          val_correct += T.where((pred - batch_y).abs() >= 0.5, 0, 1).sum()
-          val_loss += loss_fn(pred, batch_y).item()
+        pred = self.model(batch_X)
+        val_count += batch_X.shape[0]
+        val_correct += T.where((pred - batch_y).abs() >= 0.5, 0, 1).sum()
+        val_loss += loss_fn(pred, batch_y).item()
 
+      if verbose:
+        print("Epoch:",epoch,"| Train Loss:",train_loss,"| Val Loss:",val_loss,
+          "| Train Acc:", str(train_correct / (train_count * pred.shape[1])),
+          "| Val Acc:",str(val_correct / (val_count * pred.shape[1])))
+
+  def __auto_threshold_col(self,pos,neg):
+    #Sort pos and neg
+    pos = pos.sort(descending=True).values
+    neg = neg.sort(descending=False).values
+
+    #Trim the longer array to match the size of the shorter one
+    min_len = min(pos.shape[0],neg.shape[0])
+    pos = pos[-min_len:]
+    neg = neg[-min_len:]
+
+    #Search for an optimal place to put the threshold
+    hi = min_len - 1
+    lo = 0
+    best_ind = -1
+    while hi != lo:
+      ind = (hi + lo) // 2
+      if pos[ind] > neg[ind]:
+        lo = ind
+        best_ind = ind
+      else:
+        hi = ind
       
-      print("Epoch:",epoch,"| Train Loss:",train_loss,"| Val Loss:",val_loss,"| Val Acc:",str(val_correct / (val_count * pred.shape[1])))
+      #Prevents infinite loop due to rounding
+      if hi - lo == 1:
+        if pos[hi] > neg[hi]:
+          best_ind = hi
+        lo = hi
+        
+    #Given the best index, return the best float at which to actually place the threshold
+    return ((pos[best_ind] + neg[best_ind]) / 2).item()
+    
+
+  def __auto_threshold(self):
+    result = []
+    #For each column, seperate the scores into positive and negative scores
+    # and further process them.
+    reference_scores = self.model(self.reference_embeddings)
+    for col in range(reference_scores.shape[1]):
+      pos = reference_scores[:,col][self.reference_filter_map[:,col].bool()]
+      neg = reference_scores[:,col][~self.reference_filter_map[:,col].bool()]
+      result.append(self.__auto_threshold_col(pos,neg))
+    return result
 
 
   #Predict classifications for a list of tokens
-  def filter(self, tokens:list, threshold:int=0.5):
+  def filter(self, tokens:list, threshold=None, 
+  print_threshold=False, bool_format:bool=True):
+
+    #Calculate threshold if needed
+    threshold = self.__auto_threshold() if threshold == None else threshold
+
+    #Handle list threshold inputs
+    if isinstance(threshold,list):
+      if len(threshold) == self.reference_filter_map.shape[1]:
+        threshold = T.Tensor(threshold)
+      else:
+        raise ValueError("If a list is provided as threshold it must be the\
+        same length as number of classes, expected",self.reference_filter_map.shape[1],'got'
+        ,len(threshold))
+
+    #Print threshold if requested
+    if print_threshold:
+      print("Threshold is", threshold)
+    
+    #Calculate results
     input_embeddings = self.__batch_embed(tokens)
     scores = self.model(input_embeddings)
-    classifications = T.where(scores >= threshold, 1, 0)
-    return self.__get_classification_df(tokens,classifications)
+    classifications = T.where(scores >= threshold, 1, 0) if bool_format else scores.detach().numpy()
+    return self.__get_classification_df(tokens,classifications,bool_format)
 
 
 
@@ -223,3 +313,21 @@ class CosineFilteringModel(object):
     scores = self.__do_embedding_comparisons(input_embeddings)
     classifications = self.__do_embedding_classification(scores)
     return self.__get_classification_df(tokens,classifications)
+
+#A stab I took at data generation. Didn't work out for multiple reasons
+'''#Synthesizes data if asked
+    if quant_synthetic_data > 0:
+      reference_embeddings_list = [tuple(self.reference_embeddings[x].tolist()) for x in range(self.reference_embeddings.shape[0])]
+      combined_reference_df = DataFrame(self.reference_filter_map.numpy())
+      combined_reference_df.insert(0,token_column_name,reference_embeddings_list)
+      
+      # Create metadata for the dataset
+      metadata = SingleTableMetadata()
+
+      # Add column types (specifying which columns are categorical)
+      metadata.detect_from_dataframe(combined_reference_df)
+
+      synthesizer = CTGANSynthesizer(metadata=metadata)
+      synthesizer.fit(combined_reference_df)
+
+      print(type(synthesizer.sample(num_rows=quant_synthetic_data)['ingredient'][0]))'''
