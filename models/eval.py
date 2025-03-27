@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
-#NOTE: The following import is temporary; change it later
-import heuristic_model as hm
+from heuristic_model import heuristic_model as hm
 #NOTE: these two need to be changed when we move things to be more centered
 RECIPE_PATH = '../data_sources/recipepairs/recipes.parquet'
 PAIRS_PATh = '../data_sources/recipepairs/pairs.parquet'
@@ -78,7 +77,7 @@ def eval(model_obj, restrictions: list[str]):
 
 class Heuristic:
 	def __init__(self):
-		self.model = hm.load_model("heuristics.json")
+		self.model = hm.load_model("heuristic_model/heuristics.json")
 	def generate(self, recipe, restriction: str):
 		#TODO: coordinate with Tuvya to change this so its consistent
 		if restriction == 'dairy_free':
