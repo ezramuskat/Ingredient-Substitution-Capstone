@@ -2,8 +2,8 @@ import pandas as pd
 import torch.nn as nn
 from collections import OrderedDict
 
-from models.distance_model.filtering_model.filtering_model import FilteringModel
-from models.distance_model.similar_ingredients.get_similar_ingredients import load_model as get_similar_ingredients_model
+from filtering_model.filtering_model import FilteringModel
+from similar_ingredients.get_similar_ingredients import load_model as get_similar_ingredients_model
 
 class DistanceModel:
     '''
@@ -18,7 +18,10 @@ class DistanceModel:
         Creates a new recipe with substituted ingredients based on dietary restrictions.
     '''
 
-    def __init__(self, hyperparameters=None):
+    def __init__(self, hyperparameters=None,
+                 filtering_model_training_data_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv",
+                similar_ingredients_all_ingredients_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json"
+                 ):
         '''
         Initializes the DistanceModel class.
 
@@ -26,6 +29,12 @@ class DistanceModel:
         ----------
         hyperparameters : dict, optional
             A dictionary of hyperparameters for the model. If None, default values are used. See below for details.
+
+        filtering_model_training_data_path : str
+            The path to the training data for the filtering model.
+
+        similar_ingredients_all_ingredients_path : str
+            The path to the all ingredients data for the similar ingredients model.
 
         Notes
         -----
@@ -39,8 +48,7 @@ class DistanceModel:
         '''
         
         # Load the filtering model and set it up
-        file_path = "../../data_preparation/classification_dataset/common_ingredients.csv"
-        training_data = pd.read_csv(file_path)
+        training_data = pd.read_csv(filtering_model_training_data_path)
 
         internal_model = nn.Sequential(OrderedDict([
             ('fc1', nn.Linear(768, 256)),
@@ -62,7 +70,7 @@ class DistanceModel:
         self.filtering_model.train_model(epochs=20,batch_size=33,val_split=0.2)
 
         # Load the similar ingredients model
-        self.similar_ingredients_model = get_similar_ingredients_model()
+        self.similar_ingredients_model = get_similar_ingredients_model(file_name=similar_ingredients_all_ingredients_path)
     
         # Set the hyperparameters
         if hyperparameters is None:
