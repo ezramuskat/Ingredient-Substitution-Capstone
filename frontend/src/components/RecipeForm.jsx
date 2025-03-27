@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 function RecipeForm(props) {
   const [ingredients, setIngredients] = useState([""]);
-  const [restrictions, setRestrictions] = useState([""]); //actually handle these
+  const [restrictions, setRestrictions] = useState([""]);
+  const inputRefs = useRef([]); //for QoL stuff so the cursor goes to the new ingredient
+
+  //DOM weirdness if this isn't separate from addIngredient
+  useEffect(() => {
+    if (inputRefs.current.length > 0) {
+      inputRefs.current[inputRefs.current.length - 1]?.focus();
+    }
+  }, [ingredients]);
 
   const addIngredient = () => {
     setIngredients([...ingredients, ""]);
@@ -24,6 +32,15 @@ function RecipeForm(props) {
       }
     } else {
       setRestrictions((prev) => prev.filter((item) => item !== value));
+    }
+  };
+
+  const handleKeyDown = (index, event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (ingredients[index].trim() !== "") {
+        addIngredient();
+      }
     }
   };
 
@@ -64,8 +81,10 @@ function RecipeForm(props) {
         {ingredients.map((text, index) => (
           <div key={index} className="ingredient-row">
             <input
+              ref={(el) => (inputRefs.current[index] = el)}
               value={text}
               onChange={(e) => handleIngredientsChange(index, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(index, e)}
             />
             {index === ingredients.length - 1 && (
               <button onClick={addIngredient}>+</button>
