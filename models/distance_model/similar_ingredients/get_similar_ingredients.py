@@ -8,7 +8,7 @@ def load_model(file_name = "models/distance_model/similar_ingredients/all_ingred
     Parameters
     ----------
     file_name : str
-        The name of the JSON file that contains valid ingredients. The default value is "all_ingredients.json".
+        The name of the JSON file that contains valid ingredients. The default value is the absolute path to "all_ingredients.json".
 
     Returns
     -------
@@ -70,4 +70,4 @@ def load_model(file_name = "models/distance_model/similar_ingredients/all_ingred
 if __name__ == "__main__":
     model = load_model()
     
-    print(model("apple"))
+    print(model("ground beef"))
