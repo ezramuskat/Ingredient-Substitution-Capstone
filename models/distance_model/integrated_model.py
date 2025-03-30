@@ -2,8 +2,8 @@ import pandas as pd
 import torch.nn as nn
 from collections import OrderedDict
 
-from filtering_model.filtering_model import FilteringModel
-from similar_ingredients.get_similar_ingredients import load_model as get_similar_ingredients_model
+from models.distance_model.filtering_model.filtering_model import FilteringModel
+from models.distance_model.similar_ingredients.get_similar_ingredients import load_model as get_similar_ingredients_model
 
 class DistanceModel:
     '''
@@ -284,17 +284,3 @@ class DistanceModel:
         
         # Return a copy of the hyperparameters
         return self._hyperparameters.copy()
-    
-
-if __name__ == "__main__":
-    # Example usage
-    model = DistanceModel()
-
-    pancake_recipe = ["flour", "milk", "eggs", "sugar", "baking powder", "butter"]
-    dietary_restrictions = ["vegan"]
-
-    new_recipe = model.generate_substitutes(pancake_recipe, dietary_restrictions)
-
-    print("Original Recipe:", pancake_recipe)
-    print("Dietary Restrictions:", dietary_restrictions)
-    print("New Recipe:", new_recipe)
