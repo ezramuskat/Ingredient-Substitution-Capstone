@@ -72,8 +72,8 @@ function RecipeForm(props) {
           Vegetarian
         </label>
         <label>
-          <input type="checkbox" value="option3" onChange={handleCheckboxChange} />
-          Option 3
+          <input type="checkbox" value="dairy_free" onChange={handleCheckboxChange} />
+          Dairy-Free
         </label>
       </div>
 
@@ -95,7 +95,7 @@ function RecipeForm(props) {
       </div>
 
       <div className="instructions-container">
-        <p>Instructions go here.</p>
+        <p>To enter a recipe, enter each ingredient in the middle. You can add a new ingredient by hitting the + button, or by hitting "Enter". When you've entered all the ingredients, click submit</p>
       </div>
     </div>
   );
