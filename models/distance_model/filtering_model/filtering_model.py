@@ -23,17 +23,9 @@ class FilteringModel(object):
   #Model is a pytorch model which will predict embedding classifications.
   def __init__(self, references:DataFrame, token_column_name:str="ingredient",
       embedding_model_name:str="sentence-transformers/all-MiniLM-L6-v2",
-      model:nn.Module=nn.Sequential(OrderedDict([
-          ('fc1', nn.Linear(768, 256)),
-          ('relu1', nn.LeakyReLU()),
-          ('bn1', nn.BatchNorm1d(256)),
-          ('fc2', nn.Linear(256, 64)),
-          ('dr1', nn.Dropout(0.3)),
-          ('relu2', nn.LeakyReLU()),
-          ('bn2', nn.BatchNorm1d(64)),
-          ('fc3', nn.Linear(64, 4)),
-          ('sg1', nn.Sigmoid())
-          ])),trust_remote_code=True):
+      model:nn.Module=None,trust_remote_code:bool=True):
+
+    
     #Copy references to make sure we don't accidentally override the original
     references = references.copy()
 
@@ -58,6 +50,25 @@ class FilteringModel(object):
         .astype('int'))
     reference_filter_map = T.tensor(reference_int_df.values, dtype=T.float32)
     self.reference_filter_map = reference_filter_map
+
+    #Create model if it doens't exist
+    if model == None:
+      test_token = self.tokenizer(["test"], padding=True, truncation=True, return_tensors='pt')
+      test_embedding = self.embedding_model(**test_token)
+      model_input_size = test_embedding[0].shape[2]
+      
+      model = nn.Sequential(OrderedDict([
+          ('fc1', nn.Linear(model_input_size, 256)),
+          ('relu1', nn.LeakyReLU()),
+          ('bn1', nn.BatchNorm1d(256)),
+          ('fc2', nn.Linear(256, 64)),
+          ('dr1', nn.Dropout(0.3)),
+          ('relu2', nn.LeakyReLU()),
+          ('bn2', nn.BatchNorm1d(64)),
+          ('fc3', nn.Linear(64, 4)),
+          ('sg1', nn.Sigmoid())
+          ]))
+
 
     #Make the model public
     self.model = model
@@ -98,9 +109,14 @@ class FilteringModel(object):
     optimizer = optimizer_class(self.model.parameters(),lr=lr)
 
     #Train Test Split
-    train_X, val_X, train_y, val_y = train_test_split(self.reference_embeddings, self.reference_filter_map, test_size=val_split)
-    train_X = train_X.detach().requires_grad_(False)
-    val_X = val_X.detach().requires_grad_(False)
+    if val_split != 0:
+      train_X, val_X, train_y, val_y = train_test_split(self.reference_embeddings, self.reference_filter_map, test_size=val_split)
+      train_X = train_X.detach().requires_grad_(False)
+      val_X = val_X.detach().requires_grad_(False)
+    else:
+      train_X, train_y = self.reference_embeddings, self.reference_filter_map
+      val_X, val_y = T.zeros((2,train_X.shape[1])),T.zeros((2,train_y.shape[1]))
+      train_X = train_X.detach().requires_grad_(False)
 
     #Define Data Loaders
     train_dataset = TensorDataset(train_X, train_y)
@@ -144,10 +160,13 @@ class FilteringModel(object):
         val_correct += T.where((pred - batch_y).abs() >= 0.5, 0, 1).sum()
         val_loss += loss_fn(pred, batch_y).item()
 
-      if verbose:
-        print("Epoch:",epoch,"| Train Loss:",train_loss,"| Val Loss:",val_loss,
+      if verbose and val_split != 0:
+        print("Epoch:",str(epoch+1),"| Train Loss:",train_loss,"| Val Loss:",val_loss,
           "| Train Acc:", str(train_correct / (train_count * pred.shape[1])),
           "| Val Acc:",str(val_correct / (val_count * pred.shape[1])))
+      elif verbose:
+        print("Epoch:",str(epoch+1),"| Train Loss:",train_loss,
+          "| Train Acc:", str(train_correct / (train_count * pred.shape[1])))
 
   def __auto_threshold_col(self,pos,neg):
     #Sort pos and neg
