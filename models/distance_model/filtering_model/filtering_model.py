@@ -7,6 +7,9 @@ from transformers.models.deprecated.ernie_m.modeling_ernie_m import tensor
 from torch.utils.data import DataLoader, TensorDataset
 
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score
+
+import numpy as np
 
 from collections import OrderedDict
 
@@ -99,7 +102,7 @@ class FilteringModel(object):
 
   def train_model(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
       val_split:float=0.1,batch_size:int=32,lr:float=0.001,
-      verbose:bool=True):
+      verbose:bool=True, metric_rounding:int=3):
     
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
     self.model.to(device)
@@ -130,8 +133,10 @@ class FilteringModel(object):
       self.model.train()
       train_loss = 0
       train_count = 0
-      train_correct = 0
-      for idx, (batch_X, batch_y) in enumerate(train_loader):
+      train_acc_sum = 0
+      train_pre_sum = 0
+      train_rec_sum = 0
+      for batch_X, batch_y in train_loader:
         batch_X, batch_y = batch_X.to(device), batch_y.to(device)
 
         outputs = self.model(batch_X)  
@@ -146,27 +151,50 @@ class FilteringModel(object):
         
         #For getting train accuracy
         pred = self.model(batch_X)
-        train_count += batch_X.shape[0]
-        train_correct += T.where((pred - batch_y).abs() >= 0.5, 0, 1).sum()
+        train_count += 1
+        detatched_pred = pred.detach().numpy()
+        pred_binary = (detatched_pred > 0.5).astype(int)
+        train_acc_sum += accuracy_score(batch_y,pred_binary)
+        train_pre_sum += precision_score(batch_y,pred_binary,average='macro')
+        train_rec_sum += precision_score(batch_y,pred_binary,average='macro')
 
       #Validate
       self.model.eval()
       val_loss = 0
       val_count = 0
-      val_correct = 0
+      val_acc_sum = 0
+      val_pre_sum = 0
+      val_rec_sum = 0
       for batch_X, batch_y in val_loader:
         pred = self.model(batch_X)
-        val_count += batch_X.shape[0]
-        val_correct += T.where((pred - batch_y).abs() >= 0.5, 0, 1).sum()
+        val_count += 1
+        detatched_pred = pred.detach().numpy()
+        pred_binary = (detatched_pred > 0.5).astype(int)
+        val_acc_sum += accuracy_score(batch_y,pred_binary)
+        val_pre_sum += precision_score(batch_y,pred_binary,average='macro')
+        val_rec_sum += precision_score(batch_y,pred_binary,average='macro')
         val_loss += loss_fn(pred, batch_y).item()
+
+      #Compile Metrics
+      train_loss = round(train_loss, metric_rounding)
+      train_acc = round(train_acc_sum / train_count, metric_rounding)
+      train_pre = round(train_pre_sum / train_count, metric_rounding)
+      train_rec = round(train_rec_sum / train_count, metric_rounding)
+      val_loss = round(val_loss, metric_rounding)
+      val_acc = round(val_acc_sum / val_count, metric_rounding)
+      val_pre = round(val_pre_sum / val_count, metric_rounding)
+      val_rec = round(val_rec_sum / val_count, metric_rounding)
 
       if verbose and val_split != 0:
         print("Epoch:",str(epoch+1),"| Train Loss:",train_loss,"| Val Loss:",val_loss,
-          "| Train Acc:", str(train_correct / (train_count * pred.shape[1])),
-          "| Val Acc:",str(val_correct / (val_count * pred.shape[1])))
+          "| Train Acc:", train_acc, "| Val Acc:",val_acc,
+          "| Train Pre:", train_pre, "| Val Pre:",val_pre,
+          "| Train Rec:", train_rec, "| Val Rec:",val_rec)
       elif verbose:
         print("Epoch:",str(epoch+1),"| Train Loss:",train_loss,
-          "| Train Acc:", str(train_correct / (train_count * pred.shape[1])))
+          "| Train Acc:", train_acc,
+          "| Train Pre:", train_pre,
+          "| Train Rec:", train_rec)
 
   def __auto_threshold_col(self,pos,neg):
     #Sort pos and neg
