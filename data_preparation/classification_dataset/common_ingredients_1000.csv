@@ -111,11 +111,11 @@ green chilies,yes,yes,yes,yes
 ground coriander,yes,yes,yes,yes
 cucumber,yes,yes,yes,yes
 whole milk,yes,no,no,yes
-red wine vinegar,yes,no,yes,yes
+red wine vinegar,yes,yes,yes,yes
 tumeric,yes,yes,yes,yes
 cinnamon,yes,yes,yes,yes
 curry powder,yes,yes,yes,yes
-worcestershire sauce,no,no,no,no
+worcestershire sauce,no,no,yes,yes
 white onion,yes,yes,yes,yes
 ground ginger,yes,yes,yes,yes
 sesame seeds,yes,yes,yes,yes
@@ -364,7 +364,7 @@ strawberries,yes,yes,yes,yes
 cashew nuts,yes,yes,yes,yes
 yukon gold potatoes,yes,yes,yes,yes
 tomato purée,yes,yes,yes,yes
-heavy whipping cream,yes,yes,yes,yes
+heavy whipping cream,no,no,yes,yes
 salt and ground black pepper,yes,yes,yes,yes
 cilantro sprigs,yes,yes,yes,yes
 bacon slices,no,no,yes,yes
@@ -681,12 +681,12 @@ fresh raspberries,yes,yes,yes,yes
 chicken pieces,no,no,yes,yes
 prawns,no,no,yes,yes
 ripe olives,yes,yes,yes,yes
-clam juice,yes,yes,yes,yes
+clam juice,no,no,yes,yes
 orzo,yes,yes,yes,no
 angel hair,yes,yes,yes,no
 blackberries,yes,yes,yes,yes
 fish,no,no,yes,yes
-stock,no,no,yes,yes
+stock,yes,yes,yes,yes
 tamari soy sauce,yes,yes,yes,yes
 fresh green bean,yes,yes,yes,yes
 elbow macaroni,yes,yes,yes,no
@@ -749,7 +749,7 @@ coconut cream,yes,yes,yes,yes
 hominy,yes,yes,yes,yes
 fish fillets,no,no,yes,yes
 fennel,yes,yes,yes,yes
-chicken bouillon,no,no,yes,no
+chicken bouillon,no,no,yes,yes
 semi-sweet chocolate morsels,yes,no,no,yes
 salted butter,yes,no,no,yes
 rum,yes,yes,yes,yes
@@ -912,7 +912,7 @@ pepper flakes,yes,yes,yes,yes
 fresh leav spinach,yes,yes,yes,yes
 seaweed,yes,yes,yes,yes
 roasted tomatoes,yes,yes,yes,yes
-egg roll wrappers,yes,yes,yes,no
+egg roll wrappers,yes,no,yes,no
 brown mustard seeds,yes,yes,yes,yes
 fresh oregano leaves,yes,yes,yes,yes
 wine,yes,yes,yes,yes
