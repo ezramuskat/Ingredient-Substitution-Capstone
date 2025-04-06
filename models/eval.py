@@ -25,8 +25,8 @@ def eval(model_obj, restrictions: list[str]):
 		return recipes.loc[recipes['id'] == id]['ingredients'].explode().tolist()
 	
 
-	def get_metric_details_base(row, restriction):
-		generated = set(model_obj.generate(get_recipe_by_id(row['base']), restriction))
+	def get_metric_details_base(row, restrictions):
+		generated = set(model_obj.generate(get_recipe_by_id(row['base']), restrictions))
 		tp_check = len(generated)
 		results = (0,0,0) # tp, fp, fn
 		for target in row['target']:
@@ -54,7 +54,7 @@ def eval(model_obj, restrictions: list[str]):
 		
 		# Get the pairs for the restriction, and compress the targets
 		pairs_restr = pairs[pairs['categories'].apply(lambda x: restriction in x)].groupby('base', as_index=False).agg({'target': list})
-		metric_details = pairs_restr.apply(lambda row: pd.Series(get_metric_details_base(row, restriction)), axis=1)
+		metric_details = pairs_restr.apply(lambda row: pd.Series(get_metric_details_base(row, [restriction])), axis=1)
 		tp_restr = metric_details['TP'].sum()
 		fp_restr = metric_details['FP'].sum()
 		fn_restr = metric_details['FN'].sum()
@@ -78,17 +78,16 @@ def eval(model_obj, restrictions: list[str]):
 class Heuristic:
 	def __init__(self):
 		self.model = hm.load_model("heuristic_model/heuristics.json")
-	def generate(self, recipe, restriction: str):
+	def generate(self, recipe, restrictions):
 		#TODO: coordinate with Tuvya to change this so its consistent
-		if restriction == 'dairy_free':
-			restriction = 'dairy-free'
-		return self.model(recipe, restriction)
+		restr_df_fixed = [x if x != "dairy_free" else "dairy-free" for x in restrictions]
+		return self.model(recipe, restr_df_fixed)
 	
 
 if __name__ == "__main__":
     # Quick test
 	model = Heuristic()
-	restrictions = ['vegan', 'vegetarian', 'dairy_free']
+	restrictions = ['vegan', 'vegetarian', "dairy_free"]
 	eval(model, restrictions)
 
 	
