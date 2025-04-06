@@ -13,8 +13,13 @@ function App() {
     setIsSubmitted(true)
   }
 
+  function resetSubmitted() {
+    console.log("Marking as not submitted")
+    setIsSubmitted(false)
+  }
+
   return (
-      isSubmitted ?  <SubstitutedRecipe /> : <RecipeForm submitFunc={submitFunc}/>
+      isSubmitted ?  <SubstitutedRecipe resetFunc={resetSubmitted}/> : <RecipeForm submitFunc={submitFunc}/>
   )
 }
 
