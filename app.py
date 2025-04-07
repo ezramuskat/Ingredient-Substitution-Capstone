@@ -13,8 +13,8 @@ def process_recipe(ingredients, restrictions, model="heuristic"):
       if model == "heuristic":
             print("heuristic")
             #TODO: this is a temporary workaround to handle the fact that the heuristic model can currently only handle one restriction at a time
-            restriction = restrictions[0]
-            new_recipe = heuristic_model.load_model()(ingredients, restriction)
+            #restriction = restrictions[0]
+            new_recipe = heuristic_model.load_model()(ingredients, restrictions)
             if isinstance(new_recipe, list):
                   return new_recipe
             else:

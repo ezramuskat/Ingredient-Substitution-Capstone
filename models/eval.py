@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from heuristic_model import heuristic_model as hm
+from distance_model.integrated_model import DistanceModel
 #NOTE: these two need to be changed when we move things to be more centered
 RECIPE_PATH = '../data_sources/recipepairs/recipes.parquet'
 PAIRS_PATh = '../data_sources/recipepairs/pairs.parquet'
@@ -82,11 +83,19 @@ class Heuristic:
 		#TODO: coordinate with Tuvya to change this so its consistent
 		restr_df_fixed = [x if x != "dairy_free" else "dairy-free" for x in restrictions]
 		return self.model(recipe, restr_df_fixed)
-	
+
+class Distance:
+	def __init__(self):
+		#Note to self - do path update stuff
+		self.model = DistanceModel(filtering_model_training_data_path="/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv", 
+							 similar_ingredients_all_ingredients_path="/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json")
+	def generate(self, recipe, restrictions):
+		pass
 
 if __name__ == "__main__":
     # Quick test
-	model = Heuristic()
+	#model = Heuristic()
+	model = Distance()
 	restrictions = ['vegan', 'vegetarian', "dairy_free"]
 	eval(model, restrictions)
 
