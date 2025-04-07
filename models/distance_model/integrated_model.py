@@ -2,8 +2,8 @@ import pandas as pd
 import torch.nn as nn
 from collections import OrderedDict
 
-from models.distance_model.filtering_model.filtering_model import FilteringModel
-from models.distance_model.similar_ingredients.get_similar_ingredients import load_model as get_similar_ingredients_model
+from distance_model.filtering_model.filtering_model import FilteringModel
+from distance_model.similar_ingredients.get_similar_ingredients import load_model as get_similar_ingredients_model
 
 class DistanceModel:
     '''
