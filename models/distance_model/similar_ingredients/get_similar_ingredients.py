@@ -48,6 +48,10 @@ def load_model(file_name = "models/distance_model/similar_ingredients/all_ingred
         # Increase the top_n to compensate for the filtering
         top_n = top_n * 10
 
+        # If the ingredient is a multi-word ingredient, replace spaces with underscores
+        if ' ' in ingredient:
+            ingredient = ingredient.replace(' ', '_')
+
         suggestions = embedding_model.most_similar(ingredient, topn=top_n)
         
         filtered_suggestions = []
