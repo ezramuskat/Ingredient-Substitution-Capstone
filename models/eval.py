@@ -90,7 +90,7 @@ class Distance:
 		self.model = DistanceModel(filtering_model_training_data_path="/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv", 
 							 similar_ingredients_all_ingredients_path="/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json")
 	def generate(self, recipe, restrictions):
-		pass
+		return self.model.generate_substitutes(recipe, restrictions)
 
 if __name__ == "__main__":
     # Quick test
