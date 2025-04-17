@@ -87,8 +87,8 @@ class Heuristic:
 class Distance:
 	def __init__(self):
 		#Note to self - do path update stuff
-		self.model = DistanceModel(filtering_model_training_data_path="/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv", 
-							 similar_ingredients_all_ingredients_path="/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json")
+		self.model = DistanceModel(filtering_model_training_data_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv", 
+							 similar_ingredients_all_ingredients_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json")
 	def generate(self, recipe, restrictions):
 		return self.model.generate_substitutes(recipe, restrictions)
 
