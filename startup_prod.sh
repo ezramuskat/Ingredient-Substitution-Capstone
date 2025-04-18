@@ -4,6 +4,7 @@
 flask --app app.py run -h 0.0.0.0 -p 5000 &
 FLASK_PID=$!
 
+npm install --prefix frontend
 # Start frontend
 npm run --prefix frontend build &
 REACT_PID=$!
