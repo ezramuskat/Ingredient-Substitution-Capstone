@@ -1,11 +1,9 @@
 #!/bin/bash
 
-cd frontend
-npm install
+npm install --prefix frontend
 # Start frontend
-npm run build &
+npm run --prefix frontend build &
 REACT_PID=$!
-cd ..
 
 # Start backend
 flask --app app.py run -h 0.0.0.0 -p 5000 &
