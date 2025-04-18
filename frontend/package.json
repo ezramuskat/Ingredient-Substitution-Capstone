@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.dev.js",
-    "build": "vite --config vite.config.prod.js",
+    "build": "vite --config vite.config.prod.js --host 0.0.0.0",
     "lint": "eslint .",
     "preview": "vite preview"
   },

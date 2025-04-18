@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start backend
-flask --app app.py run &
+flask --app app.py run -h 0.0.0.0 -p 5000 &
 FLASK_PID=$!
 
 # Start frontend
