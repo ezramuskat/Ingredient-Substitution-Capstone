@@ -8,8 +8,11 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, precision_score, recall_score
+from sklearn.model_selection import KFold
 
 import numpy as np
+
+import copy
 
 from collections import OrderedDict
 
@@ -100,6 +103,88 @@ class FilteringModel(object):
     result.columns = self.references.columns
     return result
 
+  #Do an iteration of training the model
+  def __do_training_iteration(self,epoch:int,model:nn.Module,train_loader:DataLoader,val_loader:DataLoader,
+      device,loss_fn:nn.Module,optimizer:optim.Optimizer,
+      verbose:bool=True,include_val:bool=True,metric_rounding:int=3):
+
+    #Train
+    model.train()
+    train_loss = 0
+    train_count = 0
+    train_acc_sum = 0
+    train_pre_sum = 0
+    train_rec_sum = 0
+    for batch_X, batch_y in train_loader:
+      batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+
+      outputs = model(batch_X)  
+      loss = loss_fn(outputs, batch_y) 
+
+      loss.backward()
+
+      train_loss += loss.item()
+      optimizer.step()
+
+      optimizer.zero_grad() 
+        
+      #For getting train accuracy
+      pred = model(batch_X)
+      train_count += 1
+      detatched_pred = pred.detach().numpy()
+      pred_binary = (detatched_pred > 0.5).astype(int)
+      train_acc_sum += accuracy_score(batch_y,pred_binary)
+      train_pre_sum += precision_score(batch_y,pred_binary,average=None)
+      train_rec_sum += precision_score(batch_y,pred_binary,average=None)
+
+    #Validate
+    model.eval()
+    val_loss = 0
+    val_count = 0
+    val_acc_sum = 0
+    val_pre_sum = 0
+    val_rec_sum = 0
+    for batch_X, batch_y in val_loader:
+      pred = model(batch_X)
+      val_count += 1
+      detatched_pred = pred.detach().numpy()
+      pred_binary = (detatched_pred > 0.5).astype(int)
+      val_acc_sum += accuracy_score(batch_y,pred_binary)
+      val_pre_sum += precision_score(batch_y,pred_binary,average=None)
+      val_rec_sum += precision_score(batch_y,pred_binary,average=None)#,average='macro'
+      val_loss += loss_fn(pred, batch_y).item()
+
+    #Compile Metrics
+    metrics = dict()
+    metrics['train_loss'] = np.round(train_loss, metric_rounding)
+    metrics['train_acc'] = np.round(train_acc_sum / train_count, metric_rounding)
+    metrics['train_pre'] = np.round(train_pre_sum / train_count, metric_rounding)
+    metrics['train_rec'] = np.round(train_rec_sum / train_count, metric_rounding)
+    metrics['val_loss'] = np.round(val_loss, metric_rounding)
+    metrics['val_acc'] = np.round(val_acc_sum / val_count, metric_rounding)
+    metrics['val_pre'] = np.round(val_pre_sum / val_count, metric_rounding)
+    metrics['val_rec'] = np.round(val_rec_sum / val_count, metric_rounding)
+
+    metrics['train_pre_avg'] = np.round(np.average(metrics['train_pre']), metric_rounding)
+    metrics['train_rec_avg'] = np.round(np.average(metrics['train_rec']), metric_rounding)
+    metrics['val_pre_avg'] = np.round(np.average(metrics['val_pre']), metric_rounding)
+    metrics['val_rec_avg'] = np.round(np.average(metrics['val_rec']), metric_rounding)
+
+    if verbose and include_val:
+      print("Epoch:",str(epoch+1),"| Train Loss:",metrics['train_loss'],"| Val Loss:",metrics['val_loss'],
+        "| Train Acc:", metrics['train_acc'], "| Val Acc:", metrics['val_acc'],
+        "| Train Pre:", metrics['train_pre_avg'], "| Val Pre:", metrics['val_pre_avg'],
+        "| Train Rec:", metrics['train_rec_avg'], "| Val Rec:", metrics['val_rec_avg'])
+    elif verbose:
+      print("Epoch:",str(epoch+1),"| Train Loss:",metrics['train_loss'],
+        "| Train Acc:", metrics['train_acc'],
+        "| Train Pre:", metrics['train_pre_avg'],
+        "| Train Rec:", metrics['train_rec_avg'])
+      
+    #Return Statistics
+    return metrics
+
+  #Public method for training the filtering model
   def train_model(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
       val_split:float=0.1,batch_size:int=32,lr:float=0.001,
       verbose:bool=True, metric_rounding:int=3):
@@ -111,7 +196,7 @@ class FilteringModel(object):
     loss_fn = loss_class()
     optimizer = optimizer_class(self.model.parameters(),lr=lr)
 
-    #Train Test Split
+    #Train Val Split
     if val_split != 0:
       train_X, val_X, train_y, val_y = train_test_split(self.reference_embeddings, self.reference_filter_map, test_size=val_split)
       train_X = train_X.detach().requires_grad_(False)
@@ -128,73 +213,66 @@ class FilteringModel(object):
     val_dataset = TensorDataset(val_X, val_y)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
+    #Train the model
     for epoch in range(epochs):
-      #Train
-      self.model.train()
-      train_loss = 0
-      train_count = 0
-      train_acc_sum = 0
-      train_pre_sum = 0
-      train_rec_sum = 0
-      for batch_X, batch_y in train_loader:
-        batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+      self.__do_training_iteration(epoch,self.model,train_loader,val_loader,
+      device,loss_fn,optimizer,
+      verbose=verbose,include_val=(val_split != 0),metric_rounding=metric_rounding)
 
-        outputs = self.model(batch_X)  
-        loss = loss_fn(outputs, batch_y) 
+  def k_fold_validate(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
+      k_folds:int=5,batch_size:int=32,lr:float=0.001,
+      verbose:bool=True, metric_rounding:int=3):
+    
+    kf = KFold(n_splits=k_folds,shuffle=True)
+    fold_metrics = []
 
-        loss.backward()
+    for i, (train_index, test_index) in enumerate(kf.split(self.reference_embeddings)):
+      device = T.device("cuda" if T.cuda.is_available() else "cpu")
+      model = copy.deepcopy(self.model)
+      model.to(device)
 
-        train_loss += loss.item()
-        optimizer.step()
+      if verbose:
+        print("\n---Fold",(i+1),"---\n")
 
-        optimizer.zero_grad() 
-        
-        #For getting train accuracy
-        pred = self.model(batch_X)
-        train_count += 1
-        detatched_pred = pred.detach().numpy()
-        pred_binary = (detatched_pred > 0.5).astype(int)
-        train_acc_sum += accuracy_score(batch_y,pred_binary)
-        train_pre_sum += precision_score(batch_y,pred_binary,average='macro')
-        train_rec_sum += precision_score(batch_y,pred_binary,average='macro')
+      #Init Loss and Optimizer
+      loss_fn = loss_class()
+      optimizer = optimizer_class(model.parameters(),lr=lr)
 
-      #Validate
-      self.model.eval()
-      val_loss = 0
-      val_count = 0
-      val_acc_sum = 0
-      val_pre_sum = 0
-      val_rec_sum = 0
-      for batch_X, batch_y in val_loader:
-        pred = self.model(batch_X)
-        val_count += 1
-        detatched_pred = pred.detach().numpy()
-        pred_binary = (detatched_pred > 0.5).astype(int)
-        val_acc_sum += accuracy_score(batch_y,pred_binary)
-        val_pre_sum += precision_score(batch_y,pred_binary,average='macro')
-        val_rec_sum += precision_score(batch_y,pred_binary,average='macro')
-        val_loss += loss_fn(pred, batch_y).item()
+      #Train Val Split
+      train_X, val_X = self.reference_embeddings[train_index], self.reference_embeddings[test_index]
+      train_y, val_y = self.reference_filter_map[train_index], self.reference_filter_map[test_index]
+      train_X = train_X.detach().requires_grad_(False)
+      val_X = val_X.detach().requires_grad_(False)
 
-      #Compile Metrics
-      train_loss = round(train_loss, metric_rounding)
-      train_acc = round(train_acc_sum / train_count, metric_rounding)
-      train_pre = round(train_pre_sum / train_count, metric_rounding)
-      train_rec = round(train_rec_sum / train_count, metric_rounding)
-      val_loss = round(val_loss, metric_rounding)
-      val_acc = round(val_acc_sum / val_count, metric_rounding)
-      val_pre = round(val_pre_sum / val_count, metric_rounding)
-      val_rec = round(val_rec_sum / val_count, metric_rounding)
+      #Define Data Loaders
+      train_dataset = TensorDataset(train_X, train_y)
+      train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-      if verbose and val_split != 0:
-        print("Epoch:",str(epoch+1),"| Train Loss:",train_loss,"| Val Loss:",val_loss,
-          "| Train Acc:", train_acc, "| Val Acc:",val_acc,
-          "| Train Pre:", train_pre, "| Val Pre:",val_pre,
-          "| Train Rec:", train_rec, "| Val Rec:",val_rec)
-      elif verbose:
-        print("Epoch:",str(epoch+1),"| Train Loss:",train_loss,
-          "| Train Acc:", train_acc,
-          "| Train Pre:", train_pre,
-          "| Train Rec:", train_rec)
+      val_dataset = TensorDataset(val_X, val_y)
+      val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+
+      #Train the model
+      for epoch in range(epochs):
+        metrics = self.__do_training_iteration(epoch,model,train_loader,val_loader,
+        device,loss_fn,optimizer,
+        verbose,True,metric_rounding)
+
+        #Record metrics
+        if epoch == (epochs - 1):
+          fold_metrics.append(metrics)
+      
+    #Average metrics and return
+    final_metrics = {key: 0.0 for key in fold_metrics[0].keys()}
+    for metrics in fold_metrics:
+      for key in metrics.keys():
+        final_metrics[key] += metrics[key]
+      
+    for key in final_metrics.keys():
+      final_metrics[key] /= len(fold_metrics)
+      final_metrics[key] = np.round(final_metrics[key],metric_rounding)
+
+    return final_metrics
+
 
   def __auto_threshold_col(self,pos,neg):
     #Sort pos and neg
