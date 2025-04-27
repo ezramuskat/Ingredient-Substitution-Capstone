@@ -226,18 +226,10 @@ class DistanceModel:
         '''
 
         # Flag the violations
-        print("Recipe: ", recipe)
         non_violations, violations = self._flag_violations(recipe, dietary_restrictions, threshold=self._hyperparameters['threshold_1'])
 
         # Get similar ingredients for the violations
         similar_ingredients = self._get_similar_ingredients(violations)
-
-        # Print the amounf of similar ingredients found for each violation
-        for ingredient, similar in similar_ingredients.items():
-            print(f"Similar ingredients for {ingredient}: {len(similar)}")
-        # Print the similar ingredients
-        for ingredient, similar in similar_ingredients.items():
-            print(f"Similar ingredients for {ingredient}: {similar}")
 
         # Pick substitutes from the similar ingredients list that do not violate the dietary restrictions
         substitutes = self._pick_substitutes(similar_ingredients, dietary_restrictions, num_suggestions=1)
