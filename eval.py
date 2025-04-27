@@ -1,10 +1,10 @@
 import pandas as pd
 import numpy as np
-from heuristic_model import heuristic_model as hm
-from distance_model.integrated_model import DistanceModel
+from models.heuristic_model import heuristic_model as hm
+from models.distance_model.integrated_model import DistanceModel
 #NOTE: these two need to be changed when we move things to be more centered
-RECIPE_PATH = '../data_sources/recipepairs/recipes.parquet'
-PAIRS_PATh = '../data_sources/recipepairs/pairs.parquet'
+RECIPE_PATH = '.ignore/recipes.parquet'
+PAIRS_PATH = '.ignore/pairs.parquet'
 
 def calc_metrics_from_details(tp, fp, fn):
 	iou = tp / (tp + fp + fn)
@@ -17,8 +17,8 @@ def calc_metrics_from_details(tp, fp, fn):
 def eval(model_obj, restrictions: list[str]):
 	print("Loading eval dataset...")
 	# load in dataframes
-	recipes = pd.read_parquet('../data_sources/recipepairs/recipes.parquet') 
-	pairs_raw = pd.read_parquet('../data_sources/recipepairs/pairs.parquet') 
+	recipes = pd.read_parquet(RECIPE_PATH) 
+	pairs_raw = pd.read_parquet(PAIRS_PATH) 
 	pairs = pairs_raw[pairs_raw['name_iou'] > 0.7]
 
 	# some method definitions that need to happen in-method
@@ -78,7 +78,7 @@ def eval(model_obj, restrictions: list[str]):
 
 class Heuristic:
 	def __init__(self):
-		self.model = hm.load_model("heuristic_model/heuristics.json")
+		self.model = hm.load_model("models/heuristic_model/heuristics.json")
 	def generate(self, recipe, restrictions):
 		#TODO: coordinate with Tuvya to change this so its consistent
 		restr_df_fixed = [x if x != "dairy_free" else "dairy-free" for x in restrictions]
@@ -87,14 +87,14 @@ class Heuristic:
 class Distance:
 	def __init__(self):
 		#Note to self - do path update stuff
-		self.model = DistanceModel(filtering_model_training_data_path="/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv", 
-							 similar_ingredients_all_ingredients_path="/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json")
+		self.model = DistanceModel(filtering_model_training_data_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv", 
+							 similar_ingredients_all_ingredients_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json")
 	def generate(self, recipe, restrictions):
 		return self.model.generate_substitutes(recipe, restrictions)
 
-if __name__ == "__main__":
+if __name__ == "__main__":	
     # Quick test
-	#model = Heuristic()
+	# model = Heuristic()
 	model = Distance()
 	restrictions = ['vegan', 'vegetarian', "dairy_free"]
 	eval(model, restrictions)
