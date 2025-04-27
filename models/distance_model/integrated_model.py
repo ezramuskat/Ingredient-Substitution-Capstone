@@ -2,8 +2,8 @@ import pandas as pd
 import torch.nn as nn
 from collections import OrderedDict
 
-from distance_model.filtering_model.filtering_model import FilteringModel
-from distance_model.similar_ingredients.get_similar_ingredients import load_model as get_similar_ingredients_model
+from models.distance_model.filtering_model.filtering_model import FilteringModel
+from models.distance_model.similar_ingredients.get_similar_ingredients import load_model as get_similar_ingredients_model
 
 class DistanceModel:
     '''
@@ -182,6 +182,11 @@ class DistanceModel:
         substitutes = {}
         
         for ingredient, similar in similar_ingredients.items():
+            if len(similar) == 0:
+                # Concatenate the ingredient with "(no substitutes found)"
+                substitutes[ingredient] = [ingredient + " (no substitutes found)"]
+                continue
+
             # Convert the similar ingredients to a dictionary from the ingredient to the similarity score
             similar_dict = {i[0]: i[1] for i in similar}
 
@@ -196,6 +201,10 @@ class DistanceModel:
 
             # Pick the top n suggestions
             substitutes[ingredient] = non_violations[:num_suggestions]
+
+            # If there are no substitutes, add the original ingredient
+            if substitutes[ingredient] is None or len(substitutes[ingredient]) == 0:
+                substitutes[ingredient] = [ingredient + " (no substitutes found)"]
         return substitutes
     
     def generate_substitutes(self, recipe, dietary_restrictions):
@@ -217,10 +226,18 @@ class DistanceModel:
         '''
 
         # Flag the violations
+        print("Recipe: ", recipe)
         non_violations, violations = self._flag_violations(recipe, dietary_restrictions, threshold=self._hyperparameters['threshold_1'])
 
         # Get similar ingredients for the violations
         similar_ingredients = self._get_similar_ingredients(violations)
+
+        # Print the amounf of similar ingredients found for each violation
+        for ingredient, similar in similar_ingredients.items():
+            print(f"Similar ingredients for {ingredient}: {len(similar)}")
+        # Print the similar ingredients
+        for ingredient, similar in similar_ingredients.items():
+            print(f"Similar ingredients for {ingredient}: {similar}")
 
         # Pick substitutes from the similar ingredients list that do not violate the dietary restrictions
         substitutes = self._pick_substitutes(similar_ingredients, dietary_restrictions, num_suggestions=1)

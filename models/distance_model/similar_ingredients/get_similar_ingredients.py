@@ -52,7 +52,31 @@ def load_model(file_name = "models/distance_model/similar_ingredients/all_ingred
         if ' ' in ingredient:
             ingredient = ingredient.replace(' ', '_')
 
-        suggestions = embedding_model.most_similar(ingredient, topn=top_n)
+        try:
+            suggestions = embedding_model.most_similar(ingredient, topn=top_n)
+        except:
+            # For when the key is not in the embedding space
+            # This fix will only cover multi-word ingredients. I'm not sure what I should do yet for tokens that don't appear in the vocabulary at all.
+
+            # This will be done by creating a vector for the ingredient by averaging the vectors of the tokens
+
+            tokens = ingredient.split('_')
+
+            vectors = []
+            for token in tokens:
+                try:
+                    vectors.append(embedding_model[token])
+                except:
+                    # If the token is not in the embedding space, skip it
+                    pass
+            if len(vectors) == 0:
+                # If none of the tokens are in the embedding space, return an empty list
+                return []
+            # Average the vectors
+            avg_vector = sum(vectors) / len(vectors)
+            # Find the most similar ingredients to the average vector
+            suggestions = embedding_model.similar_by_vector(avg_vector, topn=top_n)
+
         
         filtered_suggestions = []
 
