@@ -1,7 +1,10 @@
-from flask import Flask, render_template, request, flash
+from flask import Flask, send_from_directory, request
+import os
 from models.heuristic_model import heuristic_model
 
-app = Flask(__name__, template_folder='../frontend')
+IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
+
+app = Flask(__name__, static_folder='frontend/dist' if IS_PRODUCTION else None)
 
 processed_recipe = []
 #restrictions = []
@@ -41,5 +44,15 @@ def get_processed_recipe():
             return {
                   'ingredients': processed_recipe
             }
-      
-      
+
+if IS_PRODUCTION:
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_react(path):
+        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+            return send_from_directory(app.static_folder, path)
+        else:
+            return send_from_directory(app.static_folder, 'index.html')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
