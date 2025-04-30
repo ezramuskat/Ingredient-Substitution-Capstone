@@ -1,6 +1,6 @@
 import json
 
-def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/models/heuristic_model/heuristics.json"):
+def load_model(filename = "models/heuristic_model/heuristics.json"):
     '''
     This function loads the heuristics from a JSON file.
 
