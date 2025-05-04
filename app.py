@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory, request
+from flask import Flask, send_from_directory, request, session
 import os
 from models.heuristic_model import heuristic_model
 
@@ -6,7 +6,7 @@ IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
 
 app = Flask(__name__, static_folder='frontend/dist' if IS_PRODUCTION else None)
 
-processed_recipe = []
+#processed_recipe = []
 #restrictions = []
 
 
@@ -38,8 +38,10 @@ def get_processed_recipe():
             contents = request.get_json()
             print(contents)
             processed_recipe = process_recipe(contents['ingredients'], contents['restrictions'])
+            session['processed_recipe'] = processed_recipe
             return {}
       else:
+            processed_recipe = session.get('processed_recipe', [])
             print(processed_recipe)
             return {
                   'ingredients': processed_recipe
