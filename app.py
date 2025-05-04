@@ -39,7 +39,7 @@ def process_recipe(ingredients, restrictions, model="heuristic"):
       return ingredients
 
 
-@app.route('/processed-recipe', methods=['GET', 'POST'])
+@app.route('/api/processed-recipe', methods=['GET', 'POST'])
 def get_processed_recipe():
       global processed_recipe
       # TODO: grab results from model here
