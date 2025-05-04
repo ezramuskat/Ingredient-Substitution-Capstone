@@ -1,10 +1,19 @@
 from flask import Flask, send_from_directory, request, session
 import os
+import logging
+import sys
 from models.heuristic_model import heuristic_model
 
 IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
 
 app = Flask(__name__, static_folder='frontend/dist' if IS_PRODUCTION else None)
+app.secret_key = os.environ.get("SECRET_KEY", "dev_secret_key")
+
+#logging stuff
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+app.logger.addHandler(handler)
+app.logger.setLevel(logging.INFO)
 
 #processed_recipe = []
 #restrictions = []
@@ -22,11 +31,11 @@ def process_recipe(ingredients, restrictions, model="heuristic"):
                   return new_recipe
             else:
                   #TODO: better error handling here
-                  print("error in model run:")
-                  print(new_recipe)
+                  app.logger.info("error in model run:")
+                  app.logger.info(new_recipe)
       else:
             #TODO: 500 error here?
-            print("unknown model type loaded")
+            app.logger.info("unknown model type loaded")
       return ingredients
 
 
@@ -36,13 +45,13 @@ def get_processed_recipe():
       # TODO: grab results from model here
       if request.method == 'POST':
             contents = request.get_json()
-            print(contents)
+            app.logger.info(contents)
             processed_recipe = process_recipe(contents['ingredients'], contents['restrictions'])
             session['processed_recipe'] = processed_recipe
             return {}
       else:
             processed_recipe = session.get('processed_recipe', [])
-            print(processed_recipe)
+            app.logger.info(processed_recipe)
             return {
                   'ingredients': processed_recipe
             }
