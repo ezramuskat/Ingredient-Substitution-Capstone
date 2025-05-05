@@ -1,5 +1,5 @@
 from pandas import DataFrame
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, AutoModelForQuestionAnswering
 
 import torch as T
 from torch import nn, optim, Tensor
@@ -12,12 +12,11 @@ from sklearn.model_selection import KFold
 
 import numpy as np
 
+import os
+
 import copy
 
 from collections import OrderedDict
-
-#from sdv.metadata import SingleTableMetadata
-#from sdv.single_table import CTGANSynthesizer
 
 class FilteringModel(object):
 
@@ -29,7 +28,10 @@ class FilteringModel(object):
   #Model is a pytorch model which will predict embedding classifications.
   def __init__(self, references:DataFrame, token_column_name:str="ingredient",
       embedding_model_name:str="sentence-transformers/all-MiniLM-L6-v2",
-      model:nn.Module=None,trust_remote_code:bool=True):
+      model:nn.Module|str=None,trust_remote_code:bool=True):
+
+    #Set variable for default model save file path
+    self.default_model_path = "./filtering_model.pt"
 
     
     #Copy references to make sure we don't accidentally override the original
@@ -59,21 +61,32 @@ class FilteringModel(object):
 
     #Create model if it doens't exist
     if model == None:
-      test_token = self.tokenizer(["test"], padding=True, truncation=True, return_tensors='pt')
-      test_embedding = self.embedding_model(**test_token)
-      model_input_size = test_embedding[0].shape[2]
-      
-      model = nn.Sequential(OrderedDict([
-          ('fc1', nn.Linear(model_input_size, 256)),
-          ('relu1', nn.LeakyReLU()),
-          ('bn1', nn.BatchNorm1d(256)),
-          ('fc2', nn.Linear(256, 64)),
-          ('dr1', nn.Dropout(0.3)),
-          ('relu2', nn.LeakyReLU()),
-          ('bn2', nn.BatchNorm1d(64)),
-          ('fc3', nn.Linear(64, 4)),
-          ('sg1', nn.Sigmoid())
-          ]))
+
+      #If there is a saved model in the default model path load it
+      if os.path.exists(self.default_model_path):
+        model = T.load(self.default_model_path,weights_only=False)
+
+      #Otherwise, create a new model from the default layout
+      else:
+        test_token = self.tokenizer(["test"], padding=True, truncation=True, return_tensors='pt')
+        test_embedding = self.embedding_model(**test_token)
+        model_input_size = test_embedding[0].shape[2]
+        
+        model = nn.Sequential(OrderedDict([
+            ('fc1', nn.Linear(model_input_size, 256)),
+            ('relu1', nn.LeakyReLU()),
+            ('bn1', nn.BatchNorm1d(256)),
+            ('fc2', nn.Linear(256, 64)),
+            ('dr1', nn.Dropout(0.3)),
+            ('relu2', nn.LeakyReLU()),
+            ('bn2', nn.BatchNorm1d(64)),
+            ('fc3', nn.Linear(64, 4)),
+            ('sg1', nn.Sigmoid())
+            ]))
+    
+    #Load a model at the specified location if the user requested it
+    elif type(model) == str:
+      model = T.load(model,weights_only=False)
 
 
     #Make the model public
@@ -134,8 +147,8 @@ class FilteringModel(object):
       detatched_pred = pred.detach().numpy()
       pred_binary = (detatched_pred > 0.5).astype(int)
       train_acc_sum += accuracy_score(batch_y,pred_binary)
-      train_pre_sum += precision_score(batch_y,pred_binary,average=None)
-      train_rec_sum += precision_score(batch_y,pred_binary,average=None)
+      train_pre_sum += precision_score(batch_y,pred_binary,average=None,zero_division=1)
+      train_rec_sum += recall_score(batch_y,pred_binary,average=None,zero_division=1)
 
     #Validate
     model.eval()
@@ -150,8 +163,8 @@ class FilteringModel(object):
       detatched_pred = pred.detach().numpy()
       pred_binary = (detatched_pred > 0.5).astype(int)
       val_acc_sum += accuracy_score(batch_y,pred_binary)
-      val_pre_sum += precision_score(batch_y,pred_binary,average=None)
-      val_rec_sum += precision_score(batch_y,pred_binary,average=None)#,average='macro'
+      val_pre_sum += precision_score(batch_y,pred_binary,average=None,zero_division=1)
+      val_rec_sum += recall_score(batch_y,pred_binary,average=None,zero_division=1)#,average='macro'
       val_loss += loss_fn(pred, batch_y).item()
 
     #Compile Metrics
@@ -220,11 +233,14 @@ class FilteringModel(object):
       verbose=verbose,include_val=(val_split != 0),metric_rounding=metric_rounding)
 
   def k_fold_validate(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
-      k_folds:int=5,batch_size:int=32,lr:float=0.001,
+      k_folds:int=5,benchmark_at:list=None,batch_size:int=32,lr:float=0.001,
       verbose:bool=True, metric_rounding:int=3):
+
+    if benchmark_at == None:
+      benchmark_at = [epochs]
     
     kf = KFold(n_splits=k_folds,shuffle=True)
-    fold_metrics = []
+    fold_metrics = {x:[] for x in benchmark_at}
 
     for i, (train_index, test_index) in enumerate(kf.split(self.reference_embeddings)):
       device = T.device("cuda" if T.cuda.is_available() else "cpu")
@@ -258,19 +274,22 @@ class FilteringModel(object):
         verbose,True,metric_rounding)
 
         #Record metrics
-        if epoch == (epochs - 1):
-          fold_metrics.append(metrics)
-      
-    #Average metrics and return
-    final_metrics = {key: 0.0 for key in fold_metrics[0].keys()}
-    for metrics in fold_metrics:
-      for key in metrics.keys():
-        final_metrics[key] += metrics[key]
-      
-    for key in final_metrics.keys():
-      final_metrics[key] /= len(fold_metrics)
-      final_metrics[key] = np.round(final_metrics[key],metric_rounding)
+        if epoch + 1 in benchmark_at:
+          fold_metrics[epoch + 1].append(metrics)
+    
 
+    #Average metrics and return
+    final_metrics = {x:{key: 0.0 for key in fold_metrics[x][0].keys()} for x in benchmark_at}
+    for benchmark in benchmark_at:
+      for metrics in fold_metrics[benchmark]:
+          for key in metrics.keys():
+            final_metrics[benchmark][key] += metrics[key]
+
+    for benchmark in benchmark_at: 
+      for key in final_metrics[benchmark].keys():
+        final_metrics[benchmark][key] /= len(fold_metrics[benchmark])
+        final_metrics[benchmark][key] = np.round(final_metrics[benchmark][key],metric_rounding)
+        
     return final_metrics
 
 
@@ -317,9 +336,21 @@ class FilteringModel(object):
       result.append(self.__auto_threshold_col(pos,neg))
     return result
 
+  def __apply_modifications(self,df:DataFrame,mods:dict):
+    for row in mods.keys():
+      row_indicies = df[df[self.token_column_name] == row]
+
+      if len(row_indicies) == 0:
+        continue
+
+      row_index = row_indicies.index[0]
+      for column in mods[row].keys():
+        df.at[row_index,column] = mods[row][column]
+        
 
   #Predict classifications for a list of tokens
   def filter(self, tokens:list, threshold=None, 
+  manual_specifications:dict={},
   print_threshold=False, bool_format:bool=True):
 
     #Calculate threshold if needed
@@ -342,7 +373,14 @@ class FilteringModel(object):
     input_embeddings = self.__batch_embed(tokens)
     scores = self.model(input_embeddings)
     classifications = T.where(scores >= threshold, 1, 0) if bool_format else scores.detach().numpy()
-    return self.__get_classification_df(tokens,classifications,bool_format)
+    classifications_df = self.__get_classification_df(tokens,classifications,bool_format)
+    self.__apply_modifications(classifications_df,manual_specifications)
+    return classifications_df
+
+  def save_model(self,path=None):
+    path = self.default_model_path if path == None else path
+    T.save(self.model,path)
+
 
 
 
