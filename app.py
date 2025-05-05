@@ -28,6 +28,8 @@ def process_recipe(ingredients, restrictions, model="heuristic"):
             #restriction = restrictions[0]
             new_recipe = heuristic_model.load_model(filename="models/heuristic_model/heuristics.json")(ingredients, restrictions)
             if isinstance(new_recipe, list):
+                  print("new recipe:")
+                  print(new_recipe)
                   return new_recipe
             else:
                   #TODO: better error handling here
@@ -47,8 +49,8 @@ def get_processed_recipe():
             contents = request.get_json()
             app.logger.info(contents)
             processed_recipe = process_recipe(contents['ingredients'], contents['restrictions'])
-            session['processed_recipe'] = processed_recipe
-            return {}
+            #session['processed_recipe'] = processed_recipe
+            return {'ingredients': processed_recipe}, 200
       else:
             processed_recipe = session.get('processed_recipe', [])
             app.logger.info(processed_recipe)

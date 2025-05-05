@@ -1,24 +1,6 @@
 import { useEffect, useState } from "react";
 
 function SubstitutedRecipe(props) {
-	const [recipe, setRecipe] = useState({
-		ingredients: [""],
-	});
-	
-	useEffect(() => {
-		fetch("/api/processed-recipe").then((response) => {
-			if (response.ok) {
-				console.log("Response:", response);
-				response.json().then((contents) => {
-					console.log("Contents:", contents);
-					setRecipe({
-						ingredients: contents.ingredients,
-					});
-				});
-			}
-		});
-		console.log("Recipe Data:", recipe);
-	}, []);
 
 	return (
 		<div className="recipe-form-flex-space">
@@ -28,7 +10,7 @@ function SubstitutedRecipe(props) {
 			</div>
 
 			<div className="ingredients-container">
-				{recipe.ingredients.map((text, index) => (
+				{props.ingredients.map((text, index) => (
 					<div key={index} className="ingredient-row">
 						<p>{text}</p>
 					</div>
