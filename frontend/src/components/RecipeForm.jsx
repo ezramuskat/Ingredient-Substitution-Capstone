@@ -44,9 +44,8 @@ function RecipeForm(props) {
     }
   };
 
-  const handleSubmit = () => {
-	  props.submitFunc()
-    fetch('/api/processed-recipe', {
+  const handleSubmit = async () => {
+    const response = await fetch('/api/processed-recipe', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -58,6 +57,10 @@ function RecipeForm(props) {
       })
     })
     console.log("Submitted Data:", ingredients);
+    if (response.ok) {
+      const result = await response.json();
+      props.submitFunc(result.ingredients);
+    }
   };
 
   return (

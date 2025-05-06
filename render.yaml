@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: ingredient-substitution
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      npm install --prefix frontend
+      npm run build --prefix frontend
+    startCommand: gunicorn app:app
