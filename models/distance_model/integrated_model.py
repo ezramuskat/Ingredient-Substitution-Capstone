@@ -19,8 +19,8 @@ class DistanceModel:
     '''
 
     def __init__(self, hyperparameters=None,
-                 filtering_model_training_data_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv",
-                similar_ingredients_all_ingredients_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json"
+                 filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients.csv",
+                similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json"
                  ):
         '''
         Initializes the DistanceModel class.
