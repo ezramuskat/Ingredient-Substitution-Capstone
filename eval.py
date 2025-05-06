@@ -3,8 +3,8 @@ import numpy as np
 from models.heuristic_model import heuristic_model as hm
 from models.distance_model.integrated_model import DistanceModel
 #NOTE: these two need to be changed when we move things to be more centered
-RECIPE_PATH = '.ignore/recipes.parquet'
-PAIRS_PATH = '.ignore/pairs.parquet'
+RECIPE_PATH = 'data_sources/recipepairs/recipes.parquet'
+PAIRS_PATH = 'data_sources/recipepairs/pairs.parquet'
 
 def calc_metrics_from_details(tp, fp, fn):
 	iou = tp / (tp + fp + fn)
@@ -24,7 +24,7 @@ def eval(model_obj, restrictions: list[str]):
 	# some method definitions that need to happen in-method
 	def get_recipe_by_id(id):
 		return recipes.loc[recipes['id'] == id]['ingredients'].explode().tolist()
-	
+	counter = 0
 
 	def get_metric_details_base(row, restrictions):
 		generated = set(model_obj.generate(get_recipe_by_id(row['base']), restrictions))
@@ -40,7 +40,9 @@ def eval(model_obj, restrictions: list[str]):
 				return pd.Series((tp, fp, fn), index=['TP', 'FP', 'FN'])
 			elif tp > results[0] or (tp == results[0] and sym_diff < results[1] + results[2]):
 				results = (tp, fp, fn)
-
+		nonlocal counter
+		counter += 1
+		print("finished row ", counter)
 		return pd.Series(results, index=['TP', 'FP', 'FN'])
 	
 	#TODO: investigate if there's a faster way to do this than on a restriction-by-restriction basis
@@ -87,14 +89,14 @@ class Heuristic:
 class Distance:
 	def __init__(self):
 		#Note to self - do path update stuff
-		self.model = DistanceModel(filtering_model_training_data_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv", 
-							 similar_ingredients_all_ingredients_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json")
+		self.model = DistanceModel(filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients.csv", 
+							 similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json")
 	def generate(self, recipe, restrictions):
 		return self.model.generate_substitutes(recipe, restrictions)
 
 if __name__ == "__main__":	
     # Quick test
-	# model = Heuristic()
+	#model = Heuristic()
 	model = Distance()
 	restrictions = ['vegan', 'vegetarian', "dairy_free"]
 	eval(model, restrictions)
