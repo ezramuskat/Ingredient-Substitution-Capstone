@@ -57,6 +57,9 @@ def eval(model_obj, restrictions: list[str]):
 		
 		# Get the pairs for the restriction, and compress the targets
 		pairs_restr = pairs[pairs['categories'].apply(lambda x: restriction in x)].groupby('base', as_index=False).agg({'target': list})
+		#split in half, this is only for this branch
+		midpoint = len(pairs_restr)//2
+		pairs_restr = pairs_restr[:midpoint]
 		metric_details = pairs_restr.apply(lambda row: pd.Series(get_metric_details_base(row, [restriction])), axis=1)
 		tp_restr = metric_details['TP'].sum()
 		fp_restr = metric_details['FP'].sum()
