@@ -19,6 +19,100 @@ import copy
 from collections import OrderedDict
 
 class FilteringModel(object):
+  '''
+  This class is used to create a filtering model that can be used to identify if ingredients violate dietary restrictions.
+
+  To instantiate the class, pass in the common_ingredients_1000.csv file as a pandas dataframe (which can be found in the data_preparation directory). The rest of the parameters are optional and can be set to their default values.
+
+  Parameters
+  ----------
+  references : DataFrame
+    A DataFrame containing the classified data. The first column should contain the tokens to be classified and the rest of the columns should contain the classifications.
+  token_column_name : str
+    The name of the column in the references DataFrame that contains the tokens to be classified. Default is 'ingredient'.
+  embedding_model_name : str
+    The name of the model to be used for embedding the tokens. Default is 'sentence-transformers/all-MiniLM-L6-v2'.
+  model : nn.Module|str, optional
+    The model to be used for classification. If None, a new model will be created. If a string, the model will be loaded from the specified path. Default is None. Generally, this should remain None.
+  trust_remote_code : bool
+    Whether to trust the remote code when loading the model. Default is True. This should be set to False if you are loading a local model.
+
+  Attributes
+  ----------
+  references : DataFrame
+    A DataFrame containing the classified data. The first column should contain the tokens to be classified and the rest of the columns should contain the classifications.
+  token_column_name : str
+    The name of the column in the references DataFrame that contains the tokens to be classified. Default is 'ingredient'.
+  embedding_model : nn.Module
+    The model to be used for embedding the tokens.
+  tokenizer : AutoTokenizer
+    The tokenizer to be used for embedding the tokens.
+  model : nn.Module
+    The model to be used for classification.
+  reference_embeddings : Tensor
+    A Tensor containing the embeddings of the reference data.
+  reference_filter_map : Tensor
+    A Tensor containing the classifications of the reference data. The first column should contain the tokens to be classified and the rest of the columns should contain the classifications.
+  default_model_path : str
+    The path to the default model file. This is used to save and load the model.
+
+  Methods
+  -------
+  train_model(
+      epochs:int=10,
+      loss_class:nn.Module=nn.BCELoss,
+      optimizer_class:optim.Optimizer=optim.Adam,
+      val_split:float=0.1,
+      batch_size:int=32,
+      lr:float=0.001,
+      verbose:bool=True,
+      metric_rounding:int=3
+    )
+
+    Trains the model on the reference data.
+
+  k_fold_validate(
+      epochs:int=10,
+      loss_class:nn.Module=nn.BCELoss,
+      optimizer_class:optim.Optimizer=optim.Adam,
+      k_folds:int=5,
+      benchmark_at:list=None,
+      batch_size:int=32,
+      lr:float=0.001,
+      verbose:bool=True,
+      metric_rounding:int=3
+    )
+
+    Performs k-fold validation on the model.
+
+  filter(
+      tokens:list,
+      threshold=None,
+      manual_specifications:dict={},
+      print_threshold=False,
+      bool_format:bool=True
+    )
+    Predicts the classifications for a list of tokens.
+
+  save_model(
+      path=None
+    )
+    Saves the model to the specified path. If no path is specified, the model will be saved to the default model path.
+
+
+  Examples
+  --------
+  >>> from models.distance_model.filtering_model.filtering_model import FilteringModel
+  >>> import pandas as pd
+  >>> 
+  >>> references = pd.read_csv('common_ingredients_1000.csv')
+  >>> model = FilteringModel(references)
+  >>> model.train_model()
+  >>>
+  >>> recipe = ["beef", "onion", "garlic", "salt", "pepper", "cheese", "lettuce", "tomato", "bun"]
+  >>> filtering_model.filter(recipe)
+
+  '''
 
   #Initialize the filtering model.
   #References is the list of classified data
@@ -201,6 +295,36 @@ class FilteringModel(object):
   def train_model(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
       val_split:float=0.1,batch_size:int=32,lr:float=0.001,
       verbose:bool=True, metric_rounding:int=3):
+    '''
+    Trains the model on the reference data.
+
+    Parameters
+    ----------
+    epochs : int
+      The number of epochs to train the model for. Default is 10.
+    loss_class : nn.Module
+      The loss function to use for training the model. Default is nn.BCELoss.
+    optimizer_class : optim.Optimizer
+      The optimizer to use for training the model. Default is optim.Adam.
+    val_split : float
+      The fraction of the data to use for validation. Default is 0.1.
+    batch_size : int
+      The batch size to use for training the model. Default is 32.
+    lr : float
+      The learning rate to use for training the model. Default is 0.001.
+    verbose : bool
+      Whether to print the training progress. Default is True.
+    metric_rounding : int
+      The number of decimal places to round the metrics to. Default is 3.
+
+    Returns
+    -------
+    None
+
+    Example
+    -------
+    >>> model.train_model()
+    '''
     
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
     self.model.to(device)
@@ -235,6 +359,35 @@ class FilteringModel(object):
   def k_fold_validate(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
       k_folds:int=5,benchmark_at:list=None,batch_size:int=32,lr:float=0.001,
       verbose:bool=True, metric_rounding:int=3):
+    '''
+    Performs k-fold validation on the model.
+
+    Parameters
+    ----------
+    epochs : int
+      The number of epochs to train the model for. Default is 10.
+    loss_class : nn.Module
+      The loss function to use for training the model. Default is nn.BCELoss.
+    optimizer_class : optim.Optimizer
+      The optimizer to use for training the model. Default is optim.Adam.
+    k_folds : int
+      The number of folds to use for k-fold validation. Default is 5.
+    benchmark_at : list
+      A list of epochs at which to benchmark the model. Default is None, which means that the model will be benchmarked at the end of training.
+    batch_size : int
+      The batch size to use for training the model. Default is 32.
+    lr : float
+      The learning rate to use for training the model. Default is 0.001.
+    verbose : bool
+      Whether to print the training progress. Default is True.
+    metric_rounding : int
+      The number of decimal places to round the metrics to. Default is 3.
+    
+    Returns
+    -------
+    dict
+      A dictionary containing the metrics for each fold and each benchmark epoch.
+    '''
 
     if benchmark_at == None:
       benchmark_at = [epochs]
@@ -352,6 +505,32 @@ class FilteringModel(object):
   def filter(self, tokens:list, threshold=None, 
   manual_specifications:dict={},
   print_threshold=False, bool_format:bool=True):
+    '''
+    Predicts the classifications for a list of tokens.
+
+    Parameters
+    ----------
+    tokens : list
+      A list of tokens to be classified.
+    threshold : float|list
+      The threshold to use for classification. If None, the threshold will be calculated automatically. Default is None.
+    manual_specifications : dict
+    
+    print_threshold : bool
+      Whether to print the threshold. Default is False.
+    bool_format : bool
+      Whether to return the classifications in boolean format. Default is True.
+      If True, the classifications will be returned as 'yes' and 'no'. If False, the classifications will be returned as 1 and 0.
+
+    Returns
+    -------
+    DataFrame
+      A DataFrame containing the classifications for the tokens. The first column will contain the tokens and the rest of the columns will contain the classifications.
+
+    Example
+    -------
+    >>> model.filter(["beef", "onion", "garlic", "salt", "pepper", "cheese", "lettuce", "tomato", "bun"])
+    '''
 
     #Calculate threshold if needed
     threshold = self.__auto_threshold() if threshold == None else threshold
@@ -378,6 +557,15 @@ class FilteringModel(object):
     return classifications_df
 
   def save_model(self,path=None):
+    '''
+    Saves the model.
+
+    Parameters
+    ----------
+    path : str
+      The path to save the model to. Default is None, which means that the model will be saved to the default model path.
+    '''
+
     path = self.default_model_path if path == None else path
     T.save(self.model,path)
 
@@ -386,7 +574,7 @@ class FilteringModel(object):
 
 
 
-#Depricated
+#Deprecated
 class CosineFilteringModel(object):
 
   #Initialize the filtering model.
