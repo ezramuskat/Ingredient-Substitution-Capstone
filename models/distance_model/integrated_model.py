@@ -19,8 +19,8 @@ class DistanceModel:
     '''
 
     def __init__(self, hyperparameters=None,
-                 filtering_model_training_data_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv",
-                similar_ingredients_all_ingredients_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json"
+                 filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients.csv",
+                similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json"
                  ):
         '''
         Initializes the DistanceModel class.
@@ -50,24 +50,8 @@ class DistanceModel:
         # Load the filtering model and set it up
         training_data = pd.read_csv(filtering_model_training_data_path)
 
-        internal_model = nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(768, 256)),
-            ('relu1', nn.LeakyReLU()),
-            ('bn1', nn.BatchNorm1d(256)),
-            ('fc2', nn.Linear(256, 64)),
-            ('dr1', nn.Dropout(0.3)),
-            ('relu2', nn.LeakyReLU()),
-            ('bn2', nn.BatchNorm1d(64)),
-            ('fc3', nn.Linear(64, 4)),
-            ('sg1', nn.Sigmoid())
-        ]))
-
-        ingredient_column = 'ingredient'
-        embedding_model = "facebook/drama-base"
-
-        self.filtering_model = FilteringModel(training_data, ingredient_column, embedding_model, internal_model)
-
-        self.filtering_model.train_model(epochs=20,batch_size=33,val_split=0.2)
+        self.filtering_model = FilteringModel(training_data)
+        self.filtering_model.train_model(verbose=False)
 
         # Load the similar ingredients model
         self.similar_ingredients_model = get_similar_ingredients_model(file_name=similar_ingredients_all_ingredients_path)
