@@ -23,30 +23,30 @@ def load_model(filename = "models/heuristic_model/heuristics.json"):
 
     def model(ingredients, dietary_restrictions):
         '''
-        This function takes in a list of ingredients from a recipe, identifies the ones that are not allowed by the dietary restriction, and returns a new list of ingredients that are allowed.
+        This function takes in a list of ingredients from a recipe, identifies the ones that are not allowed by the dietary restrictions, and returns a new list of ingredients that are allowed.
 
         Parameters
         ----------
-        ingredients : list
+        ingredients : list[str] 
             A list of ingredients from a recipe.
 
         dietary_restrictions : list[str]
-            A string that specifies the dietary restriction. Can be 'vegan', 'vegetarian', or 'dairy-free'.
+            A list of strings that specifies the dietary restrictions. Can contain 'vegan', 'vegetarian', or 'dairy-free'.
 
         Returns
         -------
-        list
-            A list of ingredients that are allowed by the dietary restriction.
+        list[str]
+            A list of ingredients that are allowed by the dietary restrictions.
 
         '''
 
-        # Check if the dietary restriction is valid
+        # Check if the dietary restrictions are valid
         for restriction in dietary_restrictions:
             if restriction not in ['vegan', 'vegetarian', 'dairy-free']:
-                return "Invalid dietary restriction found. Please choose from 'vegan', 'vegetarian', or 'dairy-free'."
+                raise Exception("Invalid dietary restriction found. Please choose from 'vegan', 'vegetarian', or 'dairy-free'.")
 
+        # Load up the heuristics with the dietary restrictions specified by the user
         heuristics = {}
-
         if 'vegan' in dietary_restrictions:
             heuristics.update(all_heuristics['vegan'])
         if 'vegetarian' in dietary_restrictions:
@@ -74,8 +74,8 @@ def load_model(filename = "models/heuristic_model/heuristics.json"):
 
 if __name__ == "__main__":
     # Try loading the model and testing it
-    ingredients = ["milk", "butter", "brown eggs", "flour", "sugar", "salt", "baking powder", "chocolate chips"]
-    dietary_restrictions = ["vegan"]
+    ingredients = ["milk", "butter", "brown eggs", "flour", "sugar", "salt", "baking powder", "chocolate chips", "ground beef"]
+    dietary_restrictions = ["dairy-free", "vegetarian"]
 
     model = load_model()
     new_recipe = model(ingredients, dietary_restrictions)
