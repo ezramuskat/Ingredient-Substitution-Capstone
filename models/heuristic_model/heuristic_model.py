@@ -1,6 +1,6 @@
 import json
 
-def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/models/heuristic_model/heuristics.json"):
+def load_model(filename = "models/heuristic_model/heuristics.json"):
     '''
     This function loads the heuristics from a JSON file.
 
@@ -56,9 +56,16 @@ def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/con
 
         new_recipe = []
         for ingredient in ingredients:
-            if ingredient.lower() in heuristics:
-                new_recipe.append(heuristics[ingredient.lower()])
-            else:
+
+            is_ingredient_problematic = False
+
+            for problem, solution in heuristics.items():
+                if problem.lower() in ingredient.lower():
+                    new_recipe.append(solution)
+                    is_ingredient_problematic = True
+                    break
+                
+            if not is_ingredient_problematic:
                 new_recipe.append(ingredient)
 
         return new_recipe
@@ -67,7 +74,7 @@ def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/con
 
 if __name__ == "__main__":
     # Try loading the model and testing it
-    ingredients = ["milk", "butter", "eggs", "flour", "sugar", "salt", "baking powder", "chocolate chips"]
+    ingredients = ["milk", "butter", "brown eggs", "flour", "sugar", "salt", "baking powder", "chocolate chips"]
     dietary_restrictions = ["vegan"]
 
     model = load_model()
