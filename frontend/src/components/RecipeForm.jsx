@@ -54,7 +54,7 @@ function RecipeForm(props) {
           Vegetarian
         </label>
         <label>
-          <input type="checkbox" value="dairy_free" onChange={handleCheckboxChange} />
+          <input type="checkbox" value="dairy-free" onChange={handleCheckboxChange} />
           Dairy-Free
         </label>
       </div>

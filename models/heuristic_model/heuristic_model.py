@@ -43,7 +43,7 @@ def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/con
         # Check if the dietary restriction is valid
         for restriction in dietary_restrictions:
             if restriction not in ['vegan', 'vegetarian', 'dairy-free']:
-                return "Invalid dietary restriction found. Please choose from 'vegan', 'vegetarian', or 'dairy-free'."
+                return f"Invalid dietary restriction {restriction} found. Please choose from 'vegan', 'vegetarian', or 'dairy-free'."
 
         heuristics = {}
 
