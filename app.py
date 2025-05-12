@@ -7,7 +7,6 @@ from models.heuristic_model import heuristic_model
 IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
 
 app = Flask(__name__, static_folder='frontend/dist' if IS_PRODUCTION else None)
-app.secret_key = os.environ.get("SECRET_KEY", "dev_secret_key")
 
 #logging stuff
 handler = logging.StreamHandler(sys.stdout)
@@ -51,12 +50,6 @@ def get_processed_recipe():
             processed_recipe = process_recipe(contents['ingredients'], contents['restrictions'])
             #session['processed_recipe'] = processed_recipe
             return {'ingredients': processed_recipe}, 200
-      else:
-            processed_recipe = session.get('processed_recipe', [])
-            app.logger.info(processed_recipe)
-            return {
-                  'ingredients': processed_recipe
-            }
 
 if IS_PRODUCTION:
     @app.route('/', defaults={'path': ''})
