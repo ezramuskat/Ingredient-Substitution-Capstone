@@ -26,38 +26,38 @@ class FilteringModel(object):
   #   This can also be used to load local models with the prefix ./
   #   This is functionally the same to the first paramater in transformers.AutoConfig.from_pretrained() and transformers.AutoTokenizer.from_pretrained()
   #Model is a pytorch model which will predict embedding classifications.
-  def __init__(self, references:DataFrame, token_column_name:str="ingredient",
+  def __init__(self, references:DataFrame=None, token_column_name:str="ingredient",
       embedding_model_name:str="sentence-transformers/all-MiniLM-L6-v2",
-      model:nn.Module|str=None,trust_remote_code:bool=True):
+      model:nn.Module|str=None,default_model_path:str="./filtering_model.pt",
+      trust_remote_code:bool=True):
 
     #Set variable for default model save file path
-    self.default_model_path = "./filtering_model.pt"
-
-    
-    #Copy references to make sure we don't accidentally override the original
-    references = references.copy()
+    self.default_model_path = default_model_path
 
     #Publicly declare model and tokenizer
     self.tokenizer = AutoTokenizer.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
     self.embedding_model = AutoModel.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
 
-    #Tokenize and process reference data
-    #This will be used as X in classification
-    self.reference_embeddings = self.__batch_embed(references[token_column_name].tolist())
-    
     #Make reference and token_column_name data public
-    self.references = references
+    self.references = references if references is None else references.copy()
     self.token_column_name = token_column_name
 
-    #Create a tensor of 1 where references is labeled 'yes' and 0 where it is labeled no
-    #This will be used as y in classification
-    reference_bool_df = references.drop(token_column_name,axis=1)
-    reference_int_df = (reference_bool_df.where(reference_bool_df != 'yes',1)
-        .where(reference_bool_df != 'no',0)
-        .where(reference_bool_df.isin(['yes','no']),0)
-        .astype('int'))
-    reference_filter_map = T.tensor(reference_int_df.values, dtype=T.float32)
-    self.reference_filter_map = reference_filter_map
+    #Allows references to be undefined
+    if references is not None:
+      #Tokenize and process reference data
+      #This will be used as X in classification
+      self.reference_embeddings = self.__batch_embed(references[token_column_name].tolist())
+      
+      #Create a tensor of 1 where references is labeled 'yes' and 0 where it is labeled no
+      #This will be used as y in classification
+      reference_bool_df = self.references.drop(token_column_name,axis=1)
+      reference_int_df = (reference_bool_df.where(reference_bool_df != 'yes',1)
+          .where(reference_bool_df != 'no',0)
+          .where(reference_bool_df.isin(['yes','no']),0)
+          .astype('int'))
+      reference_filter_map = T.tensor(reference_int_df.values, dtype=T.float32)
+      self.reference_filter_map = reference_filter_map
+
 
     #Create model if it doens't exist
     if model == None:
@@ -88,7 +88,6 @@ class FilteringModel(object):
     elif type(model) == str:
       model = T.load(model,weights_only=False)
 
-
     #Make the model public
     self.model = model
 
@@ -113,7 +112,10 @@ class FilteringModel(object):
     result = DataFrame(classifications)
     result.insert(0,"_",tokens)
     result = result.where(result != 0,'no').where(result != 1,'yes') if bool_format else result
-    result.columns = self.references.columns
+    if self.references is not None:
+      result.columns = self.references.columns
+    else:
+      result.rename(columns={result.columns[0]: self.token_column_name}, inplace=True)
     return result
 
   #Do an iteration of training the model
@@ -201,6 +203,9 @@ class FilteringModel(object):
   def train_model(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
       val_split:float=0.1,batch_size:int=32,lr:float=0.001,
       verbose:bool=True, metric_rounding:int=3):
+
+    if self.references is None:
+      raise TypeError("References must be defined in order to train model")
     
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
     self.model.to(device)
@@ -235,6 +240,9 @@ class FilteringModel(object):
   def k_fold_validate(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
       k_folds:int=5,benchmark_at:list=None,batch_size:int=32,lr:float=0.001,
       verbose:bool=True, metric_rounding:int=3):
+
+    if self.references is None:
+      raise TypeError("References must be defined in order to k-fold validate model")
 
     if benchmark_at == None:
       benchmark_at = [epochs]
@@ -353,16 +361,21 @@ class FilteringModel(object):
   manual_specifications:dict={},
   print_threshold=False, bool_format:bool=True):
 
-    #Calculate threshold if needed
-    threshold = self.__auto_threshold() if threshold == None else threshold
+    if self.references is not None:
+      #Calculate threshold if needed
+      threshold = self.__auto_threshold() if threshold == None else threshold
+    else:
+      threshold = 0.5
 
-    #Handle list threshold inputs
+    #Handle list threshold and manual category labels inputs
     if isinstance(threshold,list):
-      if len(threshold) == self.reference_filter_map.shape[1]:
+      dummy_embedding = self.__batch_embed(["test"])
+      dummy_scores = self.model(dummy_embedding)
+      if len(threshold) == dummy_scores.shape[1]:
         threshold = T.Tensor(threshold)
       else:
         raise ValueError("If a list is provided as threshold it must be the\
-        same length as number of classes, expected",self.reference_filter_map.shape[1],'got'
+        same length as number of classes, expected",dummy_scores.shape[1],'got'
         ,len(threshold))
 
     #Print threshold if requested
