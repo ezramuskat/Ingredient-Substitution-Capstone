@@ -7,7 +7,7 @@ def load_model(filename = "models/heuristic_model/heuristics.json"):
     Parameters
     ----------
     filename : str
-        The name of the JSON file that contains the heuristics. The default value is "heuristics.json".
+        The name of the JSON file that contains the heuristics. The default value is the path "heuristics.json" from the root which can be found in the "models/heuristic_model" directory.
 
     Returns
     -------
