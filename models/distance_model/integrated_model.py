@@ -12,65 +12,55 @@ class DistanceModel:
     This class substitutes restricted ingredients in a recipe with suitable alternatives
     based on the selected dietary restriction (e.g., vegan, vegetarian, dairy-free).
 
+    Parameters
+    ----------
+    hyperparameters : dict, optional
+        A dictionary of hyperparameters for the model. If None, default values are used. See below for details.
+    filtering_model_training_data_path : str, optional
+        The path to the training data for the filtering model.
+    similar_ingredients_all_ingredients_path : str, optional
+        The path to the all ingredients data for the similar ingredients model.
+
     Methods
     -------
     generate_substitutes(ingredients, dietary_restrictions):
         Creates a new recipe with substituted ingredients based on dietary restrictions.
+    set_hyperparameters(hyperparameters):
+        Sets the hyperparameters for the model.
+    get_hyperparameters():
+        Returns the hyperparameters for the model.
+
+    Example
+    -------
+    >>> model = DistanceModel()
+    >>> recipe = ["chicken", "rice", "broccoli"]
+    >>> dietary_restrictions = ["gluten_free", "dairy_free"]
+    >>> new_recipe = model.generate_substitutes(recipe, dietary_restrictions)
+
+    Notes
+    -----
+    The following hyperparameters are used:
+    - threshold_1: float
+        The threshold for the first filtering step. Default is 0.3.
+    - threshold_2: float
+        The threshold for the second filtering step. Default is 0.7.
+    - num_similar_ingredients: int
+        The number of similar ingredients to consider as alternatives. Default is 20.
     '''
 
     def __init__(self, hyperparameters=None,
-                 filtering_model_training_data_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv",
-                similar_ingredients_all_ingredients_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json"
+                 filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients.csv",
+                similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json"
                  ):
-        '''
-        Initializes the DistanceModel class.
-
-        Parameters
-        ----------
-        hyperparameters : dict, optional
-            A dictionary of hyperparameters for the model. If None, default values are used. See below for details.
-
-        filtering_model_training_data_path : str
-            The path to the training data for the filtering model.
-
-        similar_ingredients_all_ingredients_path : str
-            The path to the all ingredients data for the similar ingredients model.
-
-        Notes
-        -----
-        The following hyperparameters are used:
-        - threshold_1: float
-            The threshold for the first filtering step. Default is 0.3.
-        - threshold_2: float
-            The threshold for the second filtering step. Default is 0.7.
-        - num_similar_ingredients: int
-            The number of similar ingredients to consider as alternatives. Default is 20.
-        '''
         
         # Load the filtering model and set it up
         training_data = pd.read_csv(filtering_model_training_data_path)
 
-        internal_model = nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(768, 256)),
-            ('relu1', nn.LeakyReLU()),
-            ('bn1', nn.BatchNorm1d(256)),
-            ('fc2', nn.Linear(256, 64)),
-            ('dr1', nn.Dropout(0.3)),
-            ('relu2', nn.LeakyReLU()),
-            ('bn2', nn.BatchNorm1d(64)),
-            ('fc3', nn.Linear(64, 4)),
-            ('sg1', nn.Sigmoid())
-        ]))
-
-        ingredient_column = 'ingredient'
-        embedding_model = "facebook/drama-base"
-
-        self.filtering_model = FilteringModel(training_data, ingredient_column, embedding_model, internal_model)
-
-        self.filtering_model.train_model(epochs=20,batch_size=33,val_split=0.2)
+        self._filtering_model = FilteringModel(training_data)
+        self._filtering_model.train_model(verbose=False)
 
         # Load the similar ingredients model
-        self.similar_ingredients_model = get_similar_ingredients_model(file_name=similar_ingredients_all_ingredients_path)
+        self._similar_ingredients_model = get_similar_ingredients_model(file_name=similar_ingredients_all_ingredients_path)
     
         # Set the hyperparameters
         if hyperparameters is None:
@@ -107,7 +97,7 @@ class DistanceModel:
         '''
 
         # First run the recipe through the filtering model
-        filtered_recipe = self.filtering_model.filter(recipe, threshold=threshold)
+        filtered_recipe = self._filtering_model.filter(recipe, threshold=threshold)
 
         # Then convert it to a dictionary of dictionaries
         recipe_dict = filtered_recipe.to_dict(orient='records')
@@ -150,7 +140,7 @@ class DistanceModel:
 
         for ingredient in violations:
             # Get similar ingredients
-            similar = self.similar_ingredients_model(ingredient, top_n=self._hyperparameters['num_similar_ingredients'])
+            similar = self._similar_ingredients_model(ingredient, top_n=self._hyperparameters['num_similar_ingredients'])
         
             # Store the similar ingredients in the dictionary
             similar_ingredients[ingredient] = similar

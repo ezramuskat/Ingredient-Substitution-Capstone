@@ -8,7 +8,7 @@ def load_model(file_name = "models/distance_model/similar_ingredients/all_ingred
     Parameters
     ----------
     file_name : str
-        The name of the JSON file that contains valid ingredients. The default value is the absolute path to "all_ingredients.json".
+        The name of the JSON file that contains valid ingredients. The default value is the path to "all_ingredients.json" from the root of the repo. This file can also be found under the name "ingredients_dataset" under the data_preparation directory.
 
     Returns
     -------

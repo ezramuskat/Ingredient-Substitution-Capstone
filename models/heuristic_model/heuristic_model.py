@@ -1,13 +1,13 @@
 import json
 
-def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/const_main/Ingredient-Substitution-Capstone/models/heuristic_model/heuristics.json"):
+def load_model(filename = "models/heuristic_model/heuristics.json"):
     '''
     This function loads the heuristics from a JSON file.
 
     Parameters
     ----------
     filename : str
-        The name of the JSON file that contains the heuristics. The default value is "heuristics.json".
+        The name of the JSON file that contains the heuristics. The default value is the path "heuristics.json" from the root which can be found in the "models/heuristic_model" directory.
 
     Returns
     -------
@@ -23,30 +23,30 @@ def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/con
 
     def model(ingredients, dietary_restrictions):
         '''
-        This function takes in a list of ingredients from a recipe, identifies the ones that are not allowed by the dietary restriction, and returns a new list of ingredients that are allowed.
+        This function takes in a list of ingredients from a recipe, identifies the ones that are not allowed by the dietary restrictions, and returns a new list of ingredients that are allowed.
 
         Parameters
         ----------
-        ingredients : list
+        ingredients : list[str] 
             A list of ingredients from a recipe.
 
         dietary_restrictions : list[str]
-            A string that specifies the dietary restriction. Can be 'vegan', 'vegetarian', or 'dairy-free'.
+            A list of strings that specifies the dietary restrictions. Can contain 'vegan', 'vegetarian', or 'dairy-free'.
 
         Returns
         -------
-        list
-            A list of ingredients that are allowed by the dietary restriction.
+        list[str]
+            A list of ingredients that are allowed by the dietary restrictions.
 
         '''
 
-        # Check if the dietary restriction is valid
+        # Check if the dietary restrictions are valid
         for restriction in dietary_restrictions:
             if restriction not in ['vegan', 'vegetarian', 'dairy-free']:
-                return "Invalid dietary restriction found. Please choose from 'vegan', 'vegetarian', or 'dairy-free'."
+                raise Exception("Invalid dietary restriction found. Please choose from 'vegan', 'vegetarian', or 'dairy-free'.")
 
+        # Load up the heuristics with the dietary restrictions specified by the user
         heuristics = {}
-
         if 'vegan' in dietary_restrictions:
             heuristics.update(all_heuristics['vegan'])
         if 'vegetarian' in dietary_restrictions:
@@ -56,9 +56,16 @@ def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/con
 
         new_recipe = []
         for ingredient in ingredients:
-            if ingredient.lower() in heuristics:
-                new_recipe.append(heuristics[ingredient.lower()])
-            else:
+
+            is_ingredient_problematic = False
+
+            for problem, solution in heuristics.items():
+                if problem.lower() in ingredient.lower():
+                    new_recipe.append(solution)
+                    is_ingredient_problematic = True
+                    break
+                
+            if not is_ingredient_problematic:
                 new_recipe.append(ingredient)
 
         return new_recipe
@@ -67,8 +74,8 @@ def load_model(filename = "/Users/ezramuskat/YU_Documents/COM/capstone_stuff/con
 
 if __name__ == "__main__":
     # Try loading the model and testing it
-    ingredients = ["milk", "butter", "eggs", "flour", "sugar", "salt", "baking powder", "chocolate chips"]
-    dietary_restrictions = ["vegan"]
+    ingredients = ["milk", "butter", "brown eggs", "flour", "sugar", "salt", "baking powder", "chocolate chips", "ground beef"]
+    dietary_restrictions = ["dairy-free", "vegetarian"]
 
     model = load_model()
     new_recipe = model(ingredients, dietary_restrictions)
