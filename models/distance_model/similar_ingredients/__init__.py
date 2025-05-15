@@ -1,0 +1,1 @@
+from .get_similar_ingredients import load_model as load_similar_ingredients_model
