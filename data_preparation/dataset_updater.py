@@ -16,8 +16,7 @@ class DatasetUpdater:
       with open(path, 'a') as f:
         f.write(important_col_title)
 
-  def update_dataset(self,updates:dict):
-    default_column_val = 'no'
+  def update_dataset(self,updates:dict,default_column_val:str='no'):
 
     #Read the file and update each row in the requested updates
     df = pd.read_csv(self.path)
@@ -43,8 +42,7 @@ class DatasetUpdater:
 
 
 class VotingDatasetUpdater (DatasetUpdater):  
-  def update_dataset(self,updates:dict):
-    default_column_val = '{}'
+  def update_dataset(self,updates:dict,default_column_val:str='{}'):
 
     #Read the file and update each row in the requested updates
     df = pd.read_csv(self.path)
