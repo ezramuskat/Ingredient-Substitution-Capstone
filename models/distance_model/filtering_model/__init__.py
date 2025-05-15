@@ -1,0 +1,1 @@
+from .filtering_model import FilteringModel

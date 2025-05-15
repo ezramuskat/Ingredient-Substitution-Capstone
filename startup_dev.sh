@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Start backend
+export FLASK_ENV=production
 flask --app app.py --debug run &
 FLASK_PID=$!
 

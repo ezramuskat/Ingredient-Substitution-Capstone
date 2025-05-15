@@ -7,10 +7,12 @@ import SubstitutedRecipe from './components/SubstitutedRecipe'
 
 function App() {
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [ingredients, setIngredients] = useState([""])
 
-  function submitFunc() {
+  function submitFunc(ingredients) {
     console.log("Marking as submitted")
     setIsSubmitted(true)
+    setIngredients(ingredients)
   }
 
   function resetSubmitted() {
@@ -19,7 +21,7 @@ function App() {
   }
 
   return (
-      isSubmitted ?  <SubstitutedRecipe resetFunc={resetSubmitted}/> : <RecipeForm submitFunc={submitFunc}/>
+      isSubmitted ?  <SubstitutedRecipe resetFunc={resetSubmitted} ingredients={ingredients}/> : <RecipeForm submitFunc={submitFunc}/>
   )
 }
 

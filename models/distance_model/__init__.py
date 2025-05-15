@@ -1,0 +1,2 @@
+from .filtering_model import FilteringModel
+from .similar_ingredients import load_similar_ingredients_model

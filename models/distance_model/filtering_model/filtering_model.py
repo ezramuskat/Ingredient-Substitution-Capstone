@@ -1,5 +1,5 @@
 from pandas import DataFrame
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, AutoModelForQuestionAnswering
 
 import torch as T
 from torch import nn, optim, Tensor
@@ -12,14 +12,88 @@ from sklearn.model_selection import KFold
 
 import numpy as np
 
+import os
+
 import copy
 
 from collections import OrderedDict
 
-#from sdv.metadata import SingleTableMetadata
-#from sdv.single_table import CTGANSynthesizer
-
 class FilteringModel(object):
+  '''
+  This class is used to create a filtering model that can be used to identify if ingredients violate dietary restrictions.
+
+  To instantiate the class, pass in the common_ingredients_1000.csv file as a pandas dataframe (which can be found in the data_preparation directory). The rest of the parameters are optional and can be set to their default values.
+
+  Parameters
+  ----------
+  references : DataFrame
+    A DataFrame containing the classified data. The first column should contain the tokens to be classified and the rest of the columns should contain the classifications.
+  token_column_name : str
+    The name of the column in the references DataFrame that contains the tokens to be classified. Default is 'ingredient'.
+  embedding_model_name : str
+    The name of the model to be used for embedding the tokens. Default is 'sentence-transformers/all-MiniLM-L6-v2'.
+  model : nn.Module|str, optional
+    The model to be used for classification. If None, a new model will be created. If a string, the model will be loaded from the specified path. Default is None. Generally, this should remain None.
+  trust_remote_code : bool
+    Whether to trust the remote code when loading the model. Default is True. This should be set to False if you are loading a local model.
+
+  Methods
+  -------
+  train_model(
+      epochs:int=10,
+      loss_class:nn.Module=nn.BCELoss,
+      optimizer_class:optim.Optimizer=optim.Adam,
+      val_split:float=0.1,
+      batch_size:int=32,
+      lr:float=0.001,
+      verbose:bool=True,
+      metric_rounding:int=3
+    )
+
+    Trains the model on the reference data.
+
+  k_fold_validate(
+      epochs:int=10,
+      loss_class:nn.Module=nn.BCELoss,
+      optimizer_class:optim.Optimizer=optim.Adam,
+      k_folds:int=5,
+      benchmark_at:list=None,
+      batch_size:int=32,
+      lr:float=0.001,
+      verbose:bool=True,
+      metric_rounding:int=3
+    )
+
+    Performs k-fold validation on the model.
+
+  filter(
+      tokens:list,
+      threshold=None,
+      manual_specifications:dict={},
+      print_threshold=False,
+      bool_format:bool=True
+    )
+    Predicts the classifications for a list of tokens.
+
+  save_model(
+      path=None
+    )
+    Saves the model to the specified path. If no path is specified, the model will be saved to the default model path.
+
+
+  Examples
+  --------
+  >>> from models.distance_model.filtering_model.filtering_model import FilteringModel
+  >>> import pandas as pd
+  >>> 
+  >>> references = pd.read_csv('common_ingredients_1000.csv')
+  >>> model = FilteringModel(references)
+  >>> model.train_model()
+  >>>
+  >>> recipe = ["beef", "onion", "garlic", "salt", "pepper", "cheese", "lettuce", "tomato", "bun"]
+  >>> filtering_model.filter(recipe)
+
+  '''
 
   #Initialize the filtering model.
   #References is the list of classified data
@@ -29,23 +103,26 @@ class FilteringModel(object):
   #Model is a pytorch model which will predict embedding classifications.
   def __init__(self, references:DataFrame, token_column_name:str="ingredient",
       embedding_model_name:str="sentence-transformers/all-MiniLM-L6-v2",
-      model:nn.Module=None,trust_remote_code:bool=True):
+      model:nn.Module|str=None,trust_remote_code:bool=True):
+
+    #Set variable for default model save file path
+    self._default_model_path = "./filtering_model.pt"
 
     
     #Copy references to make sure we don't accidentally override the original
     references = references.copy()
 
     #Publicly declare model and tokenizer
-    self.tokenizer = AutoTokenizer.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
-    self.embedding_model = AutoModel.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
+    self._tokenizer = AutoTokenizer.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
+    self._embedding_model = AutoModel.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
 
     #Tokenize and process reference data
     #This will be used as X in classification
-    self.reference_embeddings = self.__batch_embed(references[token_column_name].tolist())
+    self._reference_embeddings = self.__batch_embed(references[token_column_name].tolist())
     
     #Make reference and token_column_name data public
-    self.references = references
-    self.token_column_name = token_column_name
+    self._references = references
+    self._token_column_name = token_column_name
 
     #Create a tensor of 1 where references is labeled 'yes' and 0 where it is labeled no
     #This will be used as y in classification
@@ -55,29 +132,40 @@ class FilteringModel(object):
         .where(reference_bool_df.isin(['yes','no']),0)
         .astype('int'))
     reference_filter_map = T.tensor(reference_int_df.values, dtype=T.float32)
-    self.reference_filter_map = reference_filter_map
+    self._reference_filter_map = reference_filter_map
 
     #Create model if it doens't exist
     if model == None:
-      test_token = self.tokenizer(["test"], padding=True, truncation=True, return_tensors='pt')
-      test_embedding = self.embedding_model(**test_token)
-      model_input_size = test_embedding[0].shape[2]
-      
-      model = nn.Sequential(OrderedDict([
-          ('fc1', nn.Linear(model_input_size, 256)),
-          ('relu1', nn.LeakyReLU()),
-          ('bn1', nn.BatchNorm1d(256)),
-          ('fc2', nn.Linear(256, 64)),
-          ('dr1', nn.Dropout(0.3)),
-          ('relu2', nn.LeakyReLU()),
-          ('bn2', nn.BatchNorm1d(64)),
-          ('fc3', nn.Linear(64, 4)),
-          ('sg1', nn.Sigmoid())
-          ]))
+
+      #If there is a saved model in the default model path load it
+      if os.path.exists(self._default_model_path):
+        model = T.load(self._default_model_path,weights_only=False)
+
+      #Otherwise, create a new model from the default layout
+      else:
+        test_token = self._tokenizer(["test"], padding=True, truncation=True, return_tensors='pt')
+        test_embedding = self._embedding_model(**test_token)
+        model_input_size = test_embedding[0].shape[2]
+        
+        model = nn.Sequential(OrderedDict([
+            ('fc1', nn.Linear(model_input_size, 256)),
+            ('relu1', nn.LeakyReLU()),
+            ('bn1', nn.BatchNorm1d(256)),
+            ('fc2', nn.Linear(256, 64)),
+            ('dr1', nn.Dropout(0.3)),
+            ('relu2', nn.LeakyReLU()),
+            ('bn2', nn.BatchNorm1d(64)),
+            ('fc3', nn.Linear(64, 4)),
+            ('sg1', nn.Sigmoid())
+            ]))
+    
+    #Load a model at the specified location if the user requested it
+    elif type(model) == str:
+      model = T.load(model,weights_only=False)
 
 
     #Make the model public
-    self.model = model
+    self._model = model
 
   #Credit to https://huggingface.co/thenlper/gte-base
   def __average_pool(self, last_hidden_states: Tensor,
@@ -88,8 +176,8 @@ class FilteringModel(object):
 
   #Calculate vectors corresponding to each token in the tokens list
   def __batch_embed(self, tokens:list, normalize=True) -> Tensor:
-    batch_dict = self.tokenizer(tokens, max_length=512, padding=True, truncation=True, return_tensors='pt')
-    embeddings = self.embedding_model(**batch_dict).last_hidden_state
+    batch_dict = self._tokenizer(tokens, max_length=512, padding=True, truncation=True, return_tensors='pt')
+    embeddings = self._embedding_model(**batch_dict).last_hidden_state
     embeddings = self.__average_pool(embeddings, batch_dict['attention_mask'])
     if normalize:
       embeddings = nn.functional.normalize(embeddings, p=2, dim=1)
@@ -100,7 +188,7 @@ class FilteringModel(object):
     result = DataFrame(classifications)
     result.insert(0,"_",tokens)
     result = result.where(result != 0,'no').where(result != 1,'yes') if bool_format else result
-    result.columns = self.references.columns
+    result.columns = self._references.columns
     return result
 
   #Do an iteration of training the model
@@ -134,8 +222,8 @@ class FilteringModel(object):
       detatched_pred = pred.detach().numpy()
       pred_binary = (detatched_pred > 0.5).astype(int)
       train_acc_sum += accuracy_score(batch_y,pred_binary)
-      train_pre_sum += precision_score(batch_y,pred_binary,average=None)
-      train_rec_sum += precision_score(batch_y,pred_binary,average=None)
+      train_pre_sum += precision_score(batch_y,pred_binary,average=None,zero_division=1)
+      train_rec_sum += recall_score(batch_y,pred_binary,average=None,zero_division=1)
 
     #Validate
     model.eval()
@@ -150,8 +238,8 @@ class FilteringModel(object):
       detatched_pred = pred.detach().numpy()
       pred_binary = (detatched_pred > 0.5).astype(int)
       val_acc_sum += accuracy_score(batch_y,pred_binary)
-      val_pre_sum += precision_score(batch_y,pred_binary,average=None)
-      val_rec_sum += precision_score(batch_y,pred_binary,average=None)#,average='macro'
+      val_pre_sum += precision_score(batch_y,pred_binary,average=None,zero_division=1)
+      val_rec_sum += recall_score(batch_y,pred_binary,average=None,zero_division=1)#,average='macro'
       val_loss += loss_fn(pred, batch_y).item()
 
     #Compile Metrics
@@ -188,21 +276,51 @@ class FilteringModel(object):
   def train_model(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
       val_split:float=0.1,batch_size:int=32,lr:float=0.001,
       verbose:bool=True, metric_rounding:int=3):
+    '''
+    Trains the model on the reference data.
+
+    Parameters
+    ----------
+    epochs : int
+      The number of epochs to train the model for. Default is 10.
+    loss_class : nn.Module
+      The loss function to use for training the model. Default is nn.BCELoss.
+    optimizer_class : optim.Optimizer
+      The optimizer to use for training the model. Default is optim.Adam.
+    val_split : float
+      The fraction of the data to use for validation. Default is 0.1.
+    batch_size : int
+      The batch size to use for training the model. Default is 32.
+    lr : float
+      The learning rate to use for training the model. Default is 0.001.
+    verbose : bool
+      Whether to print the training progress. Default is True.
+    metric_rounding : int
+      The number of decimal places to round the metrics to. Default is 3.
+
+    Returns
+    -------
+    None
+
+    Example
+    -------
+    >>> model.train_model()
+    '''
     
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
-    self.model.to(device)
+    self._model.to(device)
 
     #Init Loss and Optimizer
     loss_fn = loss_class()
-    optimizer = optimizer_class(self.model.parameters(),lr=lr)
+    optimizer = optimizer_class(self._model.parameters(),lr=lr)
 
     #Train Val Split
     if val_split != 0:
-      train_X, val_X, train_y, val_y = train_test_split(self.reference_embeddings, self.reference_filter_map, test_size=val_split)
+      train_X, val_X, train_y, val_y = train_test_split(self._reference_embeddings, self._reference_filter_map, test_size=val_split)
       train_X = train_X.detach().requires_grad_(False)
       val_X = val_X.detach().requires_grad_(False)
     else:
-      train_X, train_y = self.reference_embeddings, self.reference_filter_map
+      train_X, train_y = self._reference_embeddings, self._reference_filter_map
       val_X, val_y = T.zeros((2,train_X.shape[1])),T.zeros((2,train_y.shape[1]))
       train_X = train_X.detach().requires_grad_(False)
 
@@ -215,20 +333,52 @@ class FilteringModel(object):
 
     #Train the model
     for epoch in range(epochs):
-      self.__do_training_iteration(epoch,self.model,train_loader,val_loader,
+      self.__do_training_iteration(epoch,self._model,train_loader,val_loader,
       device,loss_fn,optimizer,
       verbose=verbose,include_val=(val_split != 0),metric_rounding=metric_rounding)
 
   def k_fold_validate(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
-      k_folds:int=5,batch_size:int=32,lr:float=0.001,
+      k_folds:int=5,benchmark_at:list=None,batch_size:int=32,lr:float=0.001,
       verbose:bool=True, metric_rounding:int=3):
+    '''
+    Performs k-fold validation on the model.
+
+    Parameters
+    ----------
+    epochs : int
+      The number of epochs to train the model for. Default is 10.
+    loss_class : nn.Module
+      The loss function to use for training the model. Default is nn.BCELoss.
+    optimizer_class : optim.Optimizer
+      The optimizer to use for training the model. Default is optim.Adam.
+    k_folds : int
+      The number of folds to use for k-fold validation. Default is 5.
+    benchmark_at : list
+      A list of epochs at which to benchmark the model. Default is None, which means that the model will be benchmarked at the end of training.
+    batch_size : int
+      The batch size to use for training the model. Default is 32.
+    lr : float
+      The learning rate to use for training the model. Default is 0.001.
+    verbose : bool
+      Whether to print the training progress. Default is True.
+    metric_rounding : int
+      The number of decimal places to round the metrics to. Default is 3.
+    
+    Returns
+    -------
+    dict
+      A dictionary containing the metrics for each fold and each benchmark epoch.
+    '''
+
+    if benchmark_at == None:
+      benchmark_at = [epochs]
     
     kf = KFold(n_splits=k_folds,shuffle=True)
-    fold_metrics = []
+    fold_metrics = {x:[] for x in benchmark_at}
 
-    for i, (train_index, test_index) in enumerate(kf.split(self.reference_embeddings)):
+    for i, (train_index, test_index) in enumerate(kf.split(self._reference_embeddings)):
       device = T.device("cuda" if T.cuda.is_available() else "cpu")
-      model = copy.deepcopy(self.model)
+      model = copy.deepcopy(self._model)
       model.to(device)
 
       if verbose:
@@ -239,8 +389,8 @@ class FilteringModel(object):
       optimizer = optimizer_class(model.parameters(),lr=lr)
 
       #Train Val Split
-      train_X, val_X = self.reference_embeddings[train_index], self.reference_embeddings[test_index]
-      train_y, val_y = self.reference_filter_map[train_index], self.reference_filter_map[test_index]
+      train_X, val_X = self._reference_embeddings[train_index], self._reference_embeddings[test_index]
+      train_y, val_y = self._reference_filter_map[train_index], self._reference_filter_map[test_index]
       train_X = train_X.detach().requires_grad_(False)
       val_X = val_X.detach().requires_grad_(False)
 
@@ -258,19 +408,22 @@ class FilteringModel(object):
         verbose,True,metric_rounding)
 
         #Record metrics
-        if epoch == (epochs - 1):
-          fold_metrics.append(metrics)
-      
-    #Average metrics and return
-    final_metrics = {key: 0.0 for key in fold_metrics[0].keys()}
-    for metrics in fold_metrics:
-      for key in metrics.keys():
-        final_metrics[key] += metrics[key]
-      
-    for key in final_metrics.keys():
-      final_metrics[key] /= len(fold_metrics)
-      final_metrics[key] = np.round(final_metrics[key],metric_rounding)
+        if epoch + 1 in benchmark_at:
+          fold_metrics[epoch + 1].append(metrics)
+    
 
+    #Average metrics and return
+    final_metrics = {x:{key: 0.0 for key in fold_metrics[x][0].keys()} for x in benchmark_at}
+    for benchmark in benchmark_at:
+      for metrics in fold_metrics[benchmark]:
+          for key in metrics.keys():
+            final_metrics[benchmark][key] += metrics[key]
+
+    for benchmark in benchmark_at: 
+      for key in final_metrics[benchmark].keys():
+        final_metrics[benchmark][key] /= len(fold_metrics[benchmark])
+        final_metrics[benchmark][key] = np.round(final_metrics[benchmark][key],metric_rounding)
+        
     return final_metrics
 
 
@@ -310,28 +463,66 @@ class FilteringModel(object):
     result = []
     #For each column, seperate the scores into positive and negative scores
     # and further process them.
-    reference_scores = self.model(self.reference_embeddings)
+    reference_scores = self._model(self._reference_embeddings)
     for col in range(reference_scores.shape[1]):
-      pos = reference_scores[:,col][self.reference_filter_map[:,col].bool()]
-      neg = reference_scores[:,col][~self.reference_filter_map[:,col].bool()]
+      pos = reference_scores[:,col][self._reference_filter_map[:,col].bool()]
+      neg = reference_scores[:,col][~self._reference_filter_map[:,col].bool()]
       result.append(self.__auto_threshold_col(pos,neg))
     return result
 
+  def __apply_modifications(self,df:DataFrame,mods:dict):
+    for row in mods.keys():
+      row_indicies = df[df[self._token_column_name] == row]
+
+      if len(row_indicies) == 0:
+        continue
+
+      row_index = row_indicies.index[0]
+      for column in mods[row].keys():
+        df.at[row_index,column] = mods[row][column]
+        
 
   #Predict classifications for a list of tokens
   def filter(self, tokens:list, threshold=None, 
+  manual_specifications:dict={},
   print_threshold=False, bool_format:bool=True):
+    '''
+    Predicts the classifications for a list of tokens.
+
+    Parameters
+    ----------
+    tokens : list
+      A list of tokens to be classified.
+    threshold : float|list
+      The threshold to use for classification. If None, the threshold will be calculated automatically. Default is None.
+    manual_specifications : dict
+    
+    print_threshold : bool
+      Whether to print the threshold. Default is False.
+    bool_format : bool
+      Whether to return the classifications in boolean format. Default is True.
+      If True, the classifications will be returned as 'yes' and 'no'. If False, the classifications will be returned as 1 and 0.
+
+    Returns
+    -------
+    DataFrame
+      A DataFrame containing the classifications for the tokens. The first column will contain the tokens and the rest of the columns will contain the classifications.
+
+    Example
+    -------
+    >>> model.filter(["beef", "onion", "garlic", "salt", "pepper", "cheese", "lettuce", "tomato", "bun"])
+    '''
 
     #Calculate threshold if needed
     threshold = self.__auto_threshold() if threshold == None else threshold
 
     #Handle list threshold inputs
     if isinstance(threshold,list):
-      if len(threshold) == self.reference_filter_map.shape[1]:
+      if len(threshold) == self._reference_filter_map.shape[1]:
         threshold = T.Tensor(threshold)
       else:
         raise ValueError("If a list is provided as threshold it must be the\
-        same length as number of classes, expected",self.reference_filter_map.shape[1],'got'
+        same length as number of classes, expected",self._reference_filter_map.shape[1],'got'
         ,len(threshold))
 
     #Print threshold if requested
@@ -340,15 +531,31 @@ class FilteringModel(object):
     
     #Calculate results
     input_embeddings = self.__batch_embed(tokens)
-    scores = self.model(input_embeddings)
+    scores = self._model(input_embeddings)
     classifications = T.where(scores >= threshold, 1, 0) if bool_format else scores.detach().numpy()
-    return self.__get_classification_df(tokens,classifications,bool_format)
+    classifications_df = self.__get_classification_df(tokens,classifications,bool_format)
+    self.__apply_modifications(classifications_df,manual_specifications)
+    return classifications_df
+
+  def save_model(self,path=None):
+    '''
+    Saves the model.
+
+    Parameters
+    ----------
+    path : str
+      The path to save the model to. Default is None, which means that the model will be saved to the default model path.
+    '''
+
+    path = self._default_model_path if path == None else path
+    T.save(self._model,path)
 
 
 
 
 
-#Depricated
+
+#Deprecated
 class CosineFilteringModel(object):
 
   #Initialize the filtering model.
