@@ -14,28 +14,20 @@ handler.setLevel(logging.INFO)
 app.logger.addHandler(handler)
 app.logger.setLevel(logging.INFO)
 
-#processed_recipe = []
-#restrictions = []
-
 
 
 def process_recipe(ingredients, restrictions, model="heuristic"):
-      #TODO: actually incorporate model(s) here
       if model == "heuristic":
             print("heuristic")
-            #TODO: this is a temporary workaround to handle the fact that the heuristic model can currently only handle one restriction at a time
-            #restriction = restrictions[0]
             new_recipe = heuristic_model.load_model(filename="models/heuristic_model/heuristics.json")(ingredients, restrictions)
             if isinstance(new_recipe, list):
                   print("new recipe:")
                   print(new_recipe)
                   return new_recipe
             else:
-                  #TODO: better error handling here
                   app.logger.info("error in model run:")
                   app.logger.info(new_recipe)
       else:
-            #TODO: 500 error here?
             app.logger.info("unknown model type loaded")
       return ingredients
 
@@ -43,7 +35,6 @@ def process_recipe(ingredients, restrictions, model="heuristic"):
 @app.route('/api/processed-recipe', methods=['GET', 'POST'])
 def get_processed_recipe():
       global processed_recipe
-      # TODO: grab results from model here
       if request.method == 'POST':
             contents = request.get_json()
             app.logger.info(contents)
