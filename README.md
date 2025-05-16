@@ -162,7 +162,7 @@ The **Recipes dataset** is a collection of recipes in the form of lists of ingre
 ## About Us
 ### Students
 **Name:** Solomon Firfer  
-**Bio:** <Fill in later>  
+**Bio:** Solomon Firfer is a graduate of Yeshiva University with a Bachelor’s of Science in Computer Science, specializing in AI. He is currently seeking a job in Software Engineering, Artificial Intelligence, or related fields.  
 **[LinkedIn](https://www.linkedin.com/in/solomon-firfer-b9a20b265/s)**
 
 **Name:** Tuvya Macklin  
