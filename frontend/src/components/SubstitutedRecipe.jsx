@@ -18,7 +18,7 @@ function SubstitutedRecipe(props) {
 			</div>
 
 			<div className="instructions-container">
-				<p>Instructions go here.</p>
+				<p>To enter a new recipe, click the button on the left.</p>
 			</div>
 		</div>
 	);
