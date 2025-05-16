@@ -4,7 +4,7 @@ import ast
 
 class LLMModel (object):
 
-  def __init__(self, groq_api_key:str="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", llm_model_name="llama3-70b-8192"):
+  def __init__(self, groq_api_key:str, llm_model_name="llama3-70b-8192"):
     self.__llm_model_name = llm_model_name
     self.__client = Groq(api_key=groq_api_key)
 
@@ -47,10 +47,10 @@ class LLMModel (object):
 
       return response.choices[0].message.content
 
-  def call(self, ingredients:list, filters:list):
+  def call(self, ingredients:list, restrictions:list):
     ingredients_str = str(ingredients)
-    filters_str = str(filters)
-    response = self.__request_groq("ingredients:" + ingredients_str + " dietary restrictions:" + filters_str)
+    restrictions_str = str(restrictions)
+    response = self.__request_groq("ingredients:" + ingredients_str + " dietary restrictions:" + restrictions_str)
 
     try:
       return ast.literal_eval(response)
