@@ -11,12 +11,10 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score
 from sklearn.model_selection import KFold
 
 import numpy as np
-
 import os
-
 import copy
-
 from collections import OrderedDict
+from typing import Union
 
 class FilteringModel(object):
   '''
@@ -118,12 +116,18 @@ class FilteringModel(object):
   #Model is a pytorch model which will predict embedding classifications.
   def __init__(self, references:DataFrame=None, token_column_name:str="ingredient",
       embedding_model_name:str="sentence-transformers/all-MiniLM-L6-v2",
-      model:nn.Module|str=None,default_model_path:str="./filtering_model.pt",
+      models:Union[nn.Module, str, list]=None,default_model_path:Union[str, list]=None,
       trust_remote_code:bool=True):
 
-    #Set variable for default model save file path
+    if default_model_path == None:
+      if isinstance(models,list):
+        default_model_path = ["./filtering_model_" + str(i) + ".pt" for i in range(len(models))]
+      else:
+        default_model_path = ["./filtering_model.pt"]
 
-    self._default_model_path = default_model_path
+    #Set variable for default model save file path
+    self._default_model_path = [default_model_path] if type(default_model_path) == str else default_model_path
+
 
     #Publicly declare model and tokenizer
     self._tokenizer = AutoTokenizer.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
@@ -150,11 +154,11 @@ class FilteringModel(object):
       self._reference_filter_map = reference_filter_map
 
     #Create model if it doens't exist
-    if model == None:
+    if models == None:
 
       #If there is a saved model in the default model path load it
-      if os.path.exists(self._default_model_path):
-        model = T.load(self._default_model_path,weights_only=False)
+      if all(os.path.exists(path) for path in self._default_model_path):
+        models = [T.load(path,weights_only=False) for path in self._default_model_path]
 
       #Otherwise, create a new model from the default layout
       else:
@@ -162,7 +166,7 @@ class FilteringModel(object):
         test_embedding = self._embedding_model(**test_token)
         model_input_size = test_embedding[0].shape[2]
         
-        model = nn.Sequential(OrderedDict([
+        models = [nn.Sequential(OrderedDict([
             ('fc1', nn.Linear(model_input_size, 256)),
             ('relu1', nn.LeakyReLU()),
             ('bn1', nn.BatchNorm1d(256)),
@@ -172,14 +176,20 @@ class FilteringModel(object):
             ('bn2', nn.BatchNorm1d(64)),
             ('fc3', nn.Linear(64, 4)),
             ('sg1', nn.Sigmoid())
-            ]))
+            ]))]
     
     #Load a model at the specified location if the user requested it
-    elif type(model) == str:
-      model = T.load(model,weights_only=False)
+    elif type(models) == str:
+      models = [T.load(models,weights_only=False)]
+
+    elif type(models) == list and type(models[0]) == str:
+      models = [T.load(x,weights_only=False) for x in models]
+
+    elif isinstance(models,nn.Module):
+      models = [models]
 
     #Make the model public
-    self._model = model
+    self._models = models
 
   #Credit to https://huggingface.co/thenlper/gte-base
   def __average_pool(self, last_hidden_states: Tensor,
@@ -210,86 +220,121 @@ class FilteringModel(object):
 
     return result
 
+  def __average_dicts(self,data:list,rounding:int=10):
+    result_dict = {key:0 for key in data[0].keys()}
+
+    for d in data:
+      for key in d.keys():
+        result_dict[key] += d[key]
+
+    for key in result_dict.keys():
+      result_dict[key] /= len(data)
+      result_dict[key] = np.round(result_dict[key],rounding)
+
+    return result_dict
+
+      
+
   #Do an iteration of training the model
-  def __do_training_iteration(self,epoch:int,model:nn.Module,train_loader:DataLoader,val_loader:DataLoader,
-      device,loss_fn:nn.Module,optimizer:optim.Optimizer,
+  def __do_training_iteration(self,epoch:int,models:Union[nn.Module, list],
+      train_loader:DataLoader,val_loader:DataLoader,
+      device,loss_fns:Union[nn.Module, list],optimizers:Union[optim.Optimizer, list],
       verbose:bool=True,include_val:bool=True,metric_rounding:int=3):
 
-    #Train
-    model.train()
-    train_loss = 0
-    train_count = 0
-    train_acc_sum = 0
-    train_pre_sum = 0
-    train_rec_sum = 0
-    for batch_X, batch_y in train_loader:
-      batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+    models = [models] if isinstance(models,nn.Module) else models
+    loss_fns = [loss_fns] if isinstance(loss_fns,nn.Module) else loss_fns
+    optimizers = [optimizers] if isinstance(optimizers,optim.Optimizer) else optimizers
 
-      outputs = model(batch_X)  
-      loss = loss_fn(outputs, batch_y) 
+    all_metrics = []
 
-      loss.backward()
+    if not all(len(x) == len(models) for x in [models,loss_fns,optimizers]):
+      raise TypeError("The amount of models, losses and optimizers must all be equal: model len = "
+      +str(len(models))+", losses len = "+str(len(loss_fns))+", optimizers len = "+str(len(optimizers)))
 
-      train_loss += loss.item()
-      optimizer.step()
+    for index in range(len(models)):
+      model = models[index]
+      loss_fn = loss_fns[index]
+      optimizer = optimizers[index]
 
-      optimizer.zero_grad() 
-        
-      #For getting train accuracy
-      pred = model(batch_X)
-      train_count += 1
-      detatched_pred = pred.detach().numpy()
-      pred_binary = (detatched_pred > 0.5).astype(int)
-      train_acc_sum += accuracy_score(batch_y,pred_binary)
-      train_pre_sum += precision_score(batch_y,pred_binary,average=None,zero_division=1)
-      train_rec_sum += recall_score(batch_y,pred_binary,average=None,zero_division=1)
+      #Train
+      model.train()
+      train_loss = 0
+      train_count = 0
+      train_acc_sum = 0
+      train_pre_sum = 0
+      train_rec_sum = 0
+      for batch_X, batch_y in train_loader:
+        batch_X, batch_y = batch_X.to(device), batch_y.to(device)
 
-    #Validate
-    model.eval()
-    val_loss = 0
-    val_count = 0
-    val_acc_sum = 0
-    val_pre_sum = 0
-    val_rec_sum = 0
-    for batch_X, batch_y in val_loader:
-      pred = model(batch_X)
-      val_count += 1
-      detatched_pred = pred.detach().numpy()
-      pred_binary = (detatched_pred > 0.5).astype(int)
-      val_acc_sum += accuracy_score(batch_y,pred_binary)
-      val_pre_sum += precision_score(batch_y,pred_binary,average=None,zero_division=1)
-      val_rec_sum += recall_score(batch_y,pred_binary,average=None,zero_division=1)#,average='macro'
-      val_loss += loss_fn(pred, batch_y).item()
+        outputs = model(batch_X)
+        loss = loss_fn(outputs, batch_y) 
 
-    #Compile Metrics
-    metrics = dict()
-    metrics['train_loss'] = np.round(train_loss, metric_rounding)
-    metrics['train_acc'] = np.round(train_acc_sum / train_count, metric_rounding)
-    metrics['train_pre'] = np.round(train_pre_sum / train_count, metric_rounding)
-    metrics['train_rec'] = np.round(train_rec_sum / train_count, metric_rounding)
-    metrics['val_loss'] = np.round(val_loss, metric_rounding)
-    metrics['val_acc'] = np.round(val_acc_sum / val_count, metric_rounding)
-    metrics['val_pre'] = np.round(val_pre_sum / val_count, metric_rounding)
-    metrics['val_rec'] = np.round(val_rec_sum / val_count, metric_rounding)
+        loss.backward()
 
-    metrics['train_pre_avg'] = np.round(np.average(metrics['train_pre']), metric_rounding)
-    metrics['train_rec_avg'] = np.round(np.average(metrics['train_rec']), metric_rounding)
-    metrics['val_pre_avg'] = np.round(np.average(metrics['val_pre']), metric_rounding)
-    metrics['val_rec_avg'] = np.round(np.average(metrics['val_rec']), metric_rounding)
+        train_loss += loss.item()
+        optimizer.step()
 
-    if verbose and include_val:
-      print("Epoch:",str(epoch+1),"| Train Loss:",metrics['train_loss'],"| Val Loss:",metrics['val_loss'],
-        "| Train Acc:", metrics['train_acc'], "| Val Acc:", metrics['val_acc'],
-        "| Train Pre:", metrics['train_pre_avg'], "| Val Pre:", metrics['val_pre_avg'],
-        "| Train Rec:", metrics['train_rec_avg'], "| Val Rec:", metrics['val_rec_avg'])
-    elif verbose:
-      print("Epoch:",str(epoch+1),"| Train Loss:",metrics['train_loss'],
-        "| Train Acc:", metrics['train_acc'],
-        "| Train Pre:", metrics['train_pre_avg'],
-        "| Train Rec:", metrics['train_rec_avg'])
+        optimizer.zero_grad() 
+          
+        #For getting train accuracy
+        pred = model(batch_X)
+        train_count += 1
+        detatched_pred = pred.detach().numpy()
+        pred_binary = (detatched_pred > 0.5).astype(int)
+        train_acc_sum += accuracy_score(batch_y,pred_binary)
+        train_pre_sum += precision_score(batch_y,pred_binary,average=None,zero_division=1)
+        train_rec_sum += recall_score(batch_y,pred_binary,average=None,zero_division=1)
+
+      #Validate
+      model.eval()
+      val_loss = 0
+      val_count = 0
+      val_acc_sum = 0
+      val_pre_sum = 0
+      val_rec_sum = 0
+      for batch_X, batch_y in val_loader:
+        pred = model(batch_X)
+        val_count += 1
+        detatched_pred = pred.detach().numpy()
+        pred_binary = (detatched_pred > 0.5).astype(int)
+        val_acc_sum += accuracy_score(batch_y,pred_binary)
+        val_pre_sum += precision_score(batch_y,pred_binary,average=None,zero_division=1)
+        val_rec_sum += recall_score(batch_y,pred_binary,average=None,zero_division=1)#,average='macro'
+        val_loss += loss_fn(pred, batch_y).item()
+
+      #Compile Metrics
+      metrics = dict()
+      metrics['train_loss'] = np.round(train_loss, metric_rounding)
+      metrics['train_acc'] = np.round(train_acc_sum / train_count, metric_rounding)
+      metrics['train_pre'] = np.round(train_pre_sum / train_count, metric_rounding)
+      metrics['train_rec'] = np.round(train_rec_sum / train_count, metric_rounding)
+      metrics['val_loss'] = np.round(val_loss, metric_rounding)
+      metrics['val_acc'] = np.round(val_acc_sum / val_count, metric_rounding)
+      metrics['val_pre'] = np.round(val_pre_sum / val_count, metric_rounding)
+      metrics['val_rec'] = np.round(val_rec_sum / val_count, metric_rounding)
+
+      metrics['train_pre_avg'] = np.round(np.average(metrics['train_pre']), metric_rounding)
+      metrics['train_rec_avg'] = np.round(np.average(metrics['train_rec']), metric_rounding)
+      metrics['val_pre_avg'] = np.round(np.average(metrics['val_pre']), metric_rounding)
+      metrics['val_rec_avg'] = np.round(np.average(metrics['val_rec']), metric_rounding)
+
+      all_metrics.append(metrics)
       
     #Return Statistics
-    return metrics
+    final_metrics = self.__average_dicts(all_metrics,rounding=metric_rounding)
+
+    if verbose and include_val:
+      print("Epoch:",str(epoch+1),"| Train Loss:",final_metrics['train_loss'],"| Val Loss:",final_metrics['val_loss'],
+        "| Train Acc:", final_metrics['train_acc'], "| Val Acc:", final_metrics['val_acc'],
+        "| Train Pre:", final_metrics['train_pre_avg'], "| Val Pre:", final_metrics['val_pre_avg'],
+        "| Train Rec:", final_metrics['train_rec_avg'], "| Val Rec:", final_metrics['val_rec_avg'])
+    elif verbose:
+      print("Epoch:",str(epoch+1),"| Train Loss:",final_metrics['train_loss'],
+        "| Train Acc:", final_metrics['train_acc'],
+        "| Train Pre:", final_metrics['train_pre_avg'],
+        "| Train Rec:", final_metrics['train_rec_avg'])
+
+    return final_metrics
 
   #Public method for training the filtering model
   def train_model(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
@@ -326,16 +371,20 @@ class FilteringModel(object):
     -------
     >>> model.train_model()
     '''
-    
+
     if self._references is None:
-      raise TypeError("References must be defined in order to train model")
-    
+        raise TypeError("References must be defined in order to train model")
+
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
-    self._model.to(device)
+    for model in self._models:
+      model.to(device)
 
     #Init Loss and Optimizer
-    loss_fn = loss_class()
-    optimizer = optimizer_class(self._model.parameters(),lr=lr)
+    loss_fns = []
+    optimizers = []
+    for model in self._models:
+      loss_fns.append(loss_class())
+      optimizers.append(optimizer_class(model.parameters(),lr=lr))
 
     #Train Val Split
     if val_split != 0:
@@ -356,8 +405,8 @@ class FilteringModel(object):
 
     #Train the model
     for epoch in range(epochs):
-      self.__do_training_iteration(epoch,self._model,train_loader,val_loader,
-      device,loss_fn,optimizer,
+      self.__do_training_iteration(epoch,self._models,train_loader,val_loader,
+      device,loss_fns,optimizers,
       verbose=verbose,include_val=(val_split != 0),metric_rounding=metric_rounding)
 
   def k_fold_validate(self,epochs:int=10,loss_class:nn.Module=nn.BCELoss,optimizer_class:optim.Optimizer=optim.Adam,
@@ -404,15 +453,17 @@ class FilteringModel(object):
 
     for i, (train_index, test_index) in enumerate(kf.split(self._reference_embeddings)):
       device = T.device("cuda" if T.cuda.is_available() else "cpu")
-      model = copy.deepcopy(self._model)
-      model.to(device)
+      temp_models = [copy.deepcopy(x).to(device) for x in self._models]
 
       if verbose:
         print("\n---Fold",(i+1),"---\n")
 
       #Init Loss and Optimizer
-      loss_fn = loss_class()
-      optimizer = optimizer_class(model.parameters(),lr=lr)
+      loss_fns = []
+      optimizers = []
+      for model in temp_models:
+        loss_fns.append(loss_class())
+        optimizers.append(optimizer_class(model.parameters(),lr=lr))
 
       #Train Val Split
       train_X, val_X = self._reference_embeddings[train_index], self._reference_embeddings[test_index]
@@ -429,14 +480,14 @@ class FilteringModel(object):
 
       #Train the model
       for epoch in range(epochs):
-        metrics = self.__do_training_iteration(epoch,model,train_loader,val_loader,
-        device,loss_fn,optimizer,
+        metrics = self.__do_training_iteration(epoch,temp_models,train_loader,val_loader,
+        device,loss_fns,optimizers,
         verbose,True,metric_rounding)
 
         #Record metrics
         if epoch + 1 in benchmark_at:
           fold_metrics[epoch + 1].append(metrics)
-    
+  
 
     #Average metrics and return
     final_metrics = {x:{key: 0.0 for key in fold_metrics[x][0].keys()} for x in benchmark_at}
@@ -449,7 +500,7 @@ class FilteringModel(object):
       for key in final_metrics[benchmark].keys():
         final_metrics[benchmark][key] /= len(fold_metrics[benchmark])
         final_metrics[benchmark][key] = np.round(final_metrics[benchmark][key],metric_rounding)
-        
+
     return final_metrics
 
 
@@ -489,7 +540,7 @@ class FilteringModel(object):
     result = []
     #For each column, seperate the scores into positive and negative scores
     # and further process them.
-    reference_scores = self._model(self._reference_embeddings)
+    reference_scores = self._models[0](self._reference_embeddings)
     for col in range(reference_scores.shape[1]):
       pos = reference_scores[:,col][self._reference_filter_map[:,col].bool()]
       neg = reference_scores[:,col][~self._reference_filter_map[:,col].bool()]
@@ -506,7 +557,23 @@ class FilteringModel(object):
       row_index = row_indicies.index[0]
       for column in mods[row].keys():
         df.at[row_index,column] = mods[row][column]
-        
+
+
+  #Score embeddings and classify them based on weather thet meet the threshold
+  def __score_and_classify(self,input_embeddings, threshold, bool_format):
+    classifications_list = []
+    for model in self._models:
+      scores = model(input_embeddings)
+      classifications_list.append(T.where(scores >= threshold, 1, 0) if bool_format else scores.detach())
+    
+    classifications_sum = sum(classifications_list)
+    num_models = len(self._models)
+    if bool_format:
+      return T.where(classifications_sum >= (num_models / 2), 1, 0)
+    else:
+      return classifications_sum / num_models
+      
+
 
   #Predict classifications for a list of tokens
   def filter(self, tokens:list, threshold=None, 
@@ -548,7 +615,7 @@ class FilteringModel(object):
     #Handle list threshold and manual category labels inputs
     if isinstance(threshold,list):
       dummy_embedding = self.__batch_embed(["test"])
-      dummy_scores = self.model(dummy_embedding)
+      dummy_scores = self._models[0](dummy_embedding)
       if len(threshold) == dummy_scores.shape[1]:
         threshold = T.Tensor(threshold)
       else:
@@ -562,13 +629,12 @@ class FilteringModel(object):
     
     #Calculate results
     input_embeddings = self.__batch_embed(tokens)
-    scores = self._model(input_embeddings)
-    classifications = T.where(scores >= threshold, 1, 0) if bool_format else scores.detach().numpy()
+    classifications = self.__score_and_classify(input_embeddings,threshold,bool_format)
     classifications_df = self.__get_classification_df(tokens,classifications,bool_format)
     self.__apply_modifications(classifications_df,manual_specifications)
     return classifications_df
 
-  def save_model(self,path=None):
+  def save_model(self,path:Union[str, list]=None):
     '''
     Saves the model.
 
@@ -578,8 +644,12 @@ class FilteringModel(object):
       The path to save the model to. Default is None, which means that the model will be saved to the default model path.
     '''
 
+    path = [path] if type(path) == str else path
     path = self._default_model_path if path == None else path
-    T.save(self._model,path)
+
+    ##Save all models
+    for index, (model) in enumerate(self._models):
+      T.save(model,path[index])
 
 
 
