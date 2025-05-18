@@ -49,15 +49,17 @@ class DistanceModel:
     '''
 
     def __init__(self, hyperparameters=None,
-                 filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients.csv",
-                similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json"
+                 filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients_1000.csv",
+                similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json",
+                retrain_filtering_model=False
                  ):
         
         # Load the filtering model and set it up
         training_data = pd.read_csv(filtering_model_training_data_path)
 
         self._filtering_model = FilteringModel(training_data)
-        self._filtering_model.train_model(verbose=False)
+        if retrain_filtering_model:
+            self._filtering_model.train_model(verbose=False)
 
         # Load the similar ingredients model
         self._similar_ingredients_model = get_similar_ingredients_model(file_name=similar_ingredients_all_ingredients_path)
@@ -110,6 +112,9 @@ class DistanceModel:
             violation = False
 
             for restriction in dietary_restrictions:
+                if restriction not in ingredient:
+                    print("no restriction given")
+                    continue
                 if ingredient[restriction] == "no":
                     violation = True
                     break
