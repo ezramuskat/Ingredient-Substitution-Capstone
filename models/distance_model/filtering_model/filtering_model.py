@@ -167,15 +167,12 @@ class FilteringModel(object):
         model_input_size = test_embedding[0].shape[2]
         
         models = [nn.Sequential(OrderedDict([
-            ('fc1', nn.Linear(model_input_size, 256)),
-            ('relu1', nn.LeakyReLU()),
-            ('bn1', nn.BatchNorm1d(256)),
-            ('fc2', nn.Linear(256, 64)),
-            ('dr1', nn.Dropout(0.3)),
-            ('relu2', nn.LeakyReLU()),
-            ('bn2', nn.BatchNorm1d(64)),
-            ('fc3', nn.Linear(64, 4)),
-            ('sg1', nn.Sigmoid())
+              ('fc1', nn.Linear(model_input_size, 128)),
+              ('dr1', nn.Dropout(0.1)),
+              ('relu2', nn.LeakyReLU()),
+              ('bn2', nn.LayerNorm(128)),
+              ('fc3', nn.Linear(128, 4)),
+              ('sg1', nn.Sigmoid())
             ]))]
     
     #Load a model at the specified location if the user requested it
