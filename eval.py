@@ -43,6 +43,31 @@ def eval(model_obj, restrictions: list[str]):
 
 		return pd.Series(results, index=['TP', 'FP', 'FN'])
 	
+	def get_metric_details_base_weighted(row, restrictions):
+		orig_recip = get_recipe_by_id(row['base'])
+		generated = set(model_obj.generate(orig_recip, restrictions))
+		tp_check = len(generated)
+		results = (0,0,0) # tp, fp, fn
+		orig_recip_s = set(orig_recip)
+		for target in row['target']:
+			target_set = set(get_recipe_by_id(target))
+			fp_set = generated - target_set
+			tp = len(generated & target_set)
+			fp = len(fp_set)
+			fn = len(target_set - generated)
+			for ing in fp_set:
+				if ing in orig_recip_s:
+					fp += 1
+
+			sym_diff = fp + fn
+			if tp == tp_check == len(target_set): # if we have a perfect match; we check lengths since that's faster than equality
+				print("match")
+				return pd.Series((tp, fp, fn), index=['TP', 'FP', 'FN'])
+			elif tp > results[0] or (tp == results[0] and sym_diff < results[1] + results[2]):
+				results = (tp, fp, fn)
+
+		return pd.Series(results, index=['TP', 'FP', 'FN'])
+	
 	#TODO: investigate if there's a faster way to do this than on a restriction-by-restriction basis
 	tp = 0
 	fp = 0
@@ -55,6 +80,8 @@ def eval(model_obj, restrictions: list[str]):
 		
 		# Get the pairs for the restriction, and compress the targets
 		pairs_restr = pairs[pairs['categories'].apply(lambda x: restriction in x)].groupby('base', as_index=False).agg({'target': list})
+		breakpoint = len(pairs_restr)//150
+		pairs_restr = pairs_restr[:breakpoint]
 		metric_details = pairs_restr.apply(lambda row: pd.Series(get_metric_details_base(row, [restriction])), axis=1)
 		tp_restr = metric_details['TP'].sum()
 		fp_restr = metric_details['FP'].sum()
@@ -86,15 +113,21 @@ class Heuristic:
 
 class Distance:
 	def __init__(self):
-		self.model = DistanceModel(filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients.csv", 
-							 similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json")
+		self.model = DistanceModel(retrain_filtering_model=True)
 	def generate(self, recipe, restrictions):
 		return self.model.generate_substitutes(recipe, restrictions)
+	
+class Spitback:
+	def __init__(self):
+		print()
+	def generate(self, recipe, restrictions):
+		return recipe
 
 if __name__ == "__main__":	
     # Quick test
-	# model = Heuristic()
-	model = Distance()
+	model = Heuristic()
+	#model = Distance()
+	#model = Spitback()
 	restrictions = ['vegan', 'vegetarian', "dairy_free"]
 	eval(model, restrictions)
 
