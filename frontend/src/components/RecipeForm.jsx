@@ -3,6 +3,7 @@ import { useState } from "react";
 function RecipeForm(props) {
   const [rawIngredients, setRawIngredients] = useState("");
   const [restrictions, setRestrictions] = useState([""]);
+  const [modelChoice, setModelChoice] = useState("heuristic");
 
   const handleCheckboxChange = (event) => {
     const { value, checked } = event.target;
@@ -32,10 +33,11 @@ function RecipeForm(props) {
       body: JSON.stringify({
         ingredients: ingredients,
         restrictions: restrictions,
+        model: modelChoice,
       })
     });
 
-    console.log("Submitted Data:", ingredients);
+    console.log("Submitted Data:", ingredients, restrictions, modelChoice);
     if (response.ok) {
       const result = await response.json();
       props.submitFunc(result.ingredients);
@@ -72,6 +74,26 @@ function RecipeForm(props) {
 
       <div className="instructions-container">
         <p>Enter all ingredients into the large box above. You can separate them using commas, semicolons, or new lines. Click submit when you're ready.</p>
+        <label>
+					<input
+						type="radio"
+						name="method"
+						value="heuristic"
+						checked={modelChoice === "heuristic"}
+						onChange={(e) => setModelChoice(e.target.value)}
+					/>
+					Heuristic
+					</label>
+					<label>
+					<input
+						type="radio"
+						name="method"
+						value="distance"
+						checked={modelChoice === "distance"}
+						onChange={(e) => setModelChoice(e.target.value)}
+					/>
+					Distance
+					</label>
       </div>
     </div>
   );

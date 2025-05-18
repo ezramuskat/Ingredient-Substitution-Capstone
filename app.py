@@ -3,6 +3,7 @@ import os
 import logging
 import sys
 from models.heuristic_model import heuristic_model
+from models.distance_model.integrated_model import DistanceModel
 
 IS_PRODUCTION = os.getenv('FLASK_ENV') == 'production'
 
@@ -27,6 +28,16 @@ def process_recipe(ingredients, restrictions, model="heuristic"):
             else:
                   app.logger.info("error in model run:")
                   app.logger.info(new_recipe)
+      elif model == "distance":
+            print("distance")
+            new_recipe = DistanceModel().generate_substitutes(ingredients, restrictions)
+            if isinstance(new_recipe, list):
+                  print("new recipe:")
+                  print(new_recipe)
+                  return new_recipe
+            else:
+                  app.logger.info("error in model run:")
+                  app.logger.info(new_recipe)
       else:
             app.logger.info("unknown model type loaded")
       return ingredients
@@ -38,7 +49,7 @@ def get_processed_recipe():
       if request.method == 'POST':
             contents = request.get_json()
             app.logger.info(contents)
-            processed_recipe = process_recipe(contents['ingredients'], contents['restrictions'])
+            processed_recipe = process_recipe(contents['ingredients'], contents['restrictions'], contents['model'])
             #session['processed_recipe'] = processed_recipe
             return {'ingredients': processed_recipe}, 200
 
