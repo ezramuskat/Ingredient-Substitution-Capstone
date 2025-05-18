@@ -3,8 +3,8 @@ import numpy as np
 from models.heuristic_model import heuristic_model as hm
 from models.distance_model.integrated_model import DistanceModel
 #NOTE: these two need to be changed when we move things to be more centered
-RECIPE_PATH = '.ignore/recipes.parquet'
-PAIRS_PATH = '.ignore/pairs.parquet'
+RECIPE_PATH = 'data_sources/recipepairs/recipes.parquet'
+PAIRS_PATH = 'data_sources/recipepairs/pairs.parquet'
 
 def calc_metrics_from_details(tp, fp, fn):
 	iou = tp / (tp + fp + fn)
@@ -86,9 +86,8 @@ class Heuristic:
 
 class Distance:
 	def __init__(self):
-		#Note to self - do path update stuff
-		self.model = DistanceModel(filtering_model_training_data_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/data_preparation/classification_dataset/common_ingredients.csv", 
-							 similar_ingredients_all_ingredients_path="/Users/tuvyamacklin/Documents/Repos/Ingredient-Substitution-Capstone/models/distance_model/similar_ingredients/all_ingredients.json")
+		self.model = DistanceModel(filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients.csv", 
+							 similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json")
 	def generate(self, recipe, restrictions):
 		return self.model.generate_substitutes(recipe, restrictions)
 

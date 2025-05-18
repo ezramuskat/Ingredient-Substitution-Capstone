@@ -20,19 +20,23 @@ class FilteringModel(object):
   '''
   This class is used to create a filtering model that can be used to identify if ingredients violate dietary restrictions.
 
-  To instantiate the class, pass in the common_ingredients_1000.csv file as a pandas dataframe (which can be found in the data_preparation directory). The rest of the parameters are optional and can be set to their default values.
+  To instantiate the class simply, pass the path to a pre-trained model which can be found at models/distance_model/filtering_model/filtering_model.pt. This should be passed to the `default_model_path` parameter. If you do not pass a model, the class will create a new model with the default architecture.
+
+  You can also train your own model by passing a DataFrame containing the classified data. A dataset for this model can be found at data_preparation/classification_dataset/common_ingredients_1000.csv.
 
   Parameters
   ----------
-  references : DataFrame
+  references : DataFrame, optional
     A DataFrame containing the classified data. The first column should contain the tokens to be classified and the rest of the columns should contain the classifications.
-  token_column_name : str
+  token_column_name : str, optional
     The name of the column in the references DataFrame that contains the tokens to be classified. Default is 'ingredient'.
-  embedding_model_name : str
+  embedding_model_name : str, optional
     The name of the model to be used for embedding the tokens. Default is 'sentence-transformers/all-MiniLM-L6-v2'.
   model : nn.Module|str, optional
     The model to be used for classification. If None, a new model will be created. If a string, the model will be loaded from the specified path. Default is None. Generally, this should remain None.
-  trust_remote_code : bool
+  default_model_path : str, optional
+    The path to save the model to. If no path is specified, the model will be saved to the default model path. Default is './filtering_model.pt'. This is also the path where the model will be loaded from if the model parameter is None and a saved model exists at that path.
+  trust_remote_code : bool, optional
     Whether to trust the remote code when loading the model. Default is True. This should be set to False if you are loading a local model.
 
   Methods
@@ -81,12 +85,23 @@ class FilteringModel(object):
 
   Examples
   --------
+  To use a pre-trained model, simply instantiate the class with no parameters:
+  >>> from models.distance_model.filtering_model.filtering_model import FilteringModel
+  >>> 
+  >>> path_to_model = "models/distance_model/filtering_model/filtering_model.pt"
+  >>> filtering_model = FilteringModel(model=path_to_model)
+  >>>
+  >>> recipe = ["beef", "onion", "garlic", "salt", "pepper", "cheese", "lettuce", "tomato", "bun"]
+  >>> filtering_model.filter(recipe)
+
+  To train your own model, pass a DataFrame containing the classified data:
   >>> from models.distance_model.filtering_model.filtering_model import FilteringModel
   >>> import pandas as pd
-  >>> 
-  >>> references = pd.read_csv('common_ingredients_1000.csv')
-  >>> model = FilteringModel(references)
-  >>> model.train_model()
+  >>>
+  >>> path_to_data = "data_preparation/classification_dataset/common_ingredients_1000.csv"
+  >>> references = pd.read_csv(path_to_data)
+  >>> filtering_model = FilteringModel(references=references)
+  >>> filtering_model.train_model()
   >>>
   >>> recipe = ["beef", "onion", "garlic", "salt", "pepper", "cheese", "lettuce", "tomato", "bun"]
   >>> filtering_model.filter(recipe)
@@ -112,6 +127,7 @@ class FilteringModel(object):
 
     #Set variable for default model save file path
     self._default_model_path = [default_model_path] if type(default_model_path) == str else default_model_path
+
 
     #Publicly declare model and tokenizer
     self._tokenizer = AutoTokenizer.from_pretrained(embedding_model_name,trust_remote_code=trust_remote_code)
@@ -355,6 +371,7 @@ class FilteringModel(object):
     -------
     >>> model.train_model()
     '''
+
     if self._references is None:
         raise TypeError("References must be defined in order to train model")
 
