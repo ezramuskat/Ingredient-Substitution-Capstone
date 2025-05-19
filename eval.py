@@ -115,7 +115,7 @@ class Heuristic:
 
 class Distance:
 	def __init__(self):
-		self.model = DistanceModel(retrain_filtering_model=True)
+		self.model = DistanceModel()
 	def generate(self, recipe, restrictions):
 		return self.model.generate_substitutes(recipe, restrictions)
 	
