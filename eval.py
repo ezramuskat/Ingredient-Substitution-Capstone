@@ -3,6 +3,7 @@ import numpy as np
 from models.heuristic_model import heuristic_model as hm
 from models.distance_model.integrated_model import DistanceModel
 #NOTE: these two need to be changed when we move things to be more centered
+#sourced from https://huggingface.co/datasets/lishuyang/recipepairs
 RECIPE_PATH = 'data_sources/recipepairs/recipes.parquet'
 PAIRS_PATH = 'data_sources/recipepairs/pairs.parquet'
 
@@ -125,8 +126,8 @@ class Spitback:
 
 if __name__ == "__main__":	
     # Quick test
-	model = Heuristic()
-	#model = Distance()
+	#model = Heuristic()
+	model = Distance()
 	#model = Spitback()
 	restrictions = ['vegan', 'vegetarian', "dairy_free"]
 	eval(model, restrictions)
