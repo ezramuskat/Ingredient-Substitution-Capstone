@@ -56,6 +56,8 @@ def eval(model_obj, restrictions: list[str]):
 		
 		# Get the pairs for the restriction, and compress the targets
 		pairs_restr = pairs[pairs['categories'].apply(lambda x: restriction in x)].groupby('base', as_index=False).agg({'target': list})
+		breakpoint = len(pairs_restr)//150
+		pairs_restr = pairs_restr[:breakpoint]
 		metric_details = pairs_restr.apply(lambda row: pd.Series(get_metric_details_base(row, [restriction])), axis=1)
 		tp_restr = metric_details['TP'].sum()
 		fp_restr = metric_details['FP'].sum()
@@ -103,7 +105,8 @@ class LLM:
 if __name__ == "__main__":	
     # Quick test
 	# model = Heuristic()
-	model = Distance()
+	# model = Distance()
+	model = LLM(key="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")
 	restrictions = ['vegan', 'vegetarian', "dairy_free"]
 	eval(model, restrictions)
 
