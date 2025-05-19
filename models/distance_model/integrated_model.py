@@ -20,6 +20,8 @@ class DistanceModel:
         The path to the training data for the filtering model.
     similar_ingredients_all_ingredients_path : str, optional
         The path to the all ingredients data for the similar ingredients model.
+    path_to_pretrained_model : str, optional
+        The path to a pretrained filtering model. Defaults to the path to the filtering model. To train a new model, set this to None.
 
     Methods
     -------
@@ -50,14 +52,21 @@ class DistanceModel:
 
     def __init__(self, hyperparameters=None,
                  filtering_model_training_data_path="data_preparation/classification_dataset/common_ingredients.csv",
-                similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json"
+                 similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json",
+                 path_to_pretrained_model="models/distance_model/filtering_model/filtering_model.pt"
                  ):
         
         # Load the filtering model and set it up
         training_data = pd.read_csv(filtering_model_training_data_path)
 
-        self._filtering_model = FilteringModel(training_data)
-        self._filtering_model.train_model(verbose=False)
+        if path_to_pretrained_model is None:
+            # If no pretrained model is provided, train a new filtering model
+            self._filtering_model = FilteringModel(training_data)
+            self._filtering_model.train_model(verbose=False)
+
+        else:
+            # If a pretrained model is provided, load it
+            self._filtering_model = FilteringModel(default_model_path=path_to_pretrained_model)
 
         # Load the similar ingredients model
         self._similar_ingredients_model = get_similar_ingredients_model(file_name=similar_ingredients_all_ingredients_path)
