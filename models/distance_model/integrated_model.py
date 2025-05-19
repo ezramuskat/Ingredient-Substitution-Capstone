@@ -53,11 +53,12 @@ class DistanceModel:
                 similar_ingredients_all_ingredients_path="models/distance_model/similar_ingredients/all_ingredients.json",
                 retrain_filtering_model=False
                  ):
-        
+        print("starting distance model")
         # Load the filtering model and set it up
         training_data = pd.read_csv(filtering_model_training_data_path)
 
         self._filtering_model = FilteringModel(training_data)
+        print("created Filtering model")
         if retrain_filtering_model:
             self._filtering_model.train_model(verbose=False)
 
@@ -73,6 +74,7 @@ class DistanceModel:
             }
         else:
             self._hyperparameters = hyperparameters
+        print("finished starting distance model")
 
     def _flag_violations(self, recipe, dietary_restrictions, threshold=0.5):
         '''
@@ -219,12 +221,14 @@ class DistanceModel:
         list
             A new recipe with substituted ingredients based on dietary restrictions.
         '''
-
+        print("starting inside model")
         # Flag the violations
         non_violations, violations = self._flag_violations(recipe, dietary_restrictions, threshold=self._hyperparameters['threshold_1'])
+        print("flagging")
 
         # Get similar ingredients for the violations
         similar_ingredients = self._get_similar_ingredients(violations)
+        print("got violations")
 
         # Pick substitutes from the similar ingredients list that do not violate the dietary restrictions
         substitutes = self._pick_substitutes(similar_ingredients, dietary_restrictions, num_suggestions=1)
