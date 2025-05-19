@@ -30,7 +30,10 @@ def process_recipe(ingredients, restrictions, model="heuristic"):
                   app.logger.info(new_recipe)
       elif model == "distance":
             print("distance")
-            new_recipe = DistanceModel().generate_substitutes(ingredients, restrictions)
+            app.logger.info("distance") 
+            model = DistanceModel()
+            app.logger.info("instantiated model")
+            new_recipe = model.generate_substitutes(ingredients, restrictions)
             if isinstance(new_recipe, list):
                   print("new recipe:")
                   print(new_recipe)
