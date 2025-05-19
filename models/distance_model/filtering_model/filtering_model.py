@@ -33,7 +33,7 @@ class FilteringModel(object):
   embedding_model_name : str, optional
     The name of the model to be used for embedding the tokens. Default is 'sentence-transformers/all-MiniLM-L6-v2'.
   models : nn.Module|str|list, optional
-    The model to be used for classification. If None, a new model will be created. If a string, the model will be loaded from the specified path. Default is None. Generally, this should remain None.
+    The model to be used for classification. This can be a PyTorch model, a path to a saved model, or a list of models. If None, a new model will be created with the default architecture. Default is None.
   default_model_path : str, optional
     The path to save the model to. If no path is specified, the model will be saved to the default model path. Default is './filtering_model.pt'. This is also the path where the model will be loaded from if the model parameter is None and a saved model exists at that path.
   trust_remote_code : bool, optional
