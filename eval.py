@@ -121,9 +121,13 @@ class Distance:
 	
 class Spitback:
 	def __init__(self):
+		self.counter = 0
 		print()
 	def generate(self, recipe, restrictions):
+		self.counter += 1
 		return recipe
+	def print_counter(self):
+		print(self.counter)
 class LLM:
 	def __init__(self, key:str=None):
 		self.model = LLMModel(groq_api_key=key)
@@ -139,6 +143,7 @@ if __name__ == "__main__":
 	#model = Spitback()
 	restrictions = ['vegan', 'vegetarian', "dairy_free"]
 	eval(model, restrictions)
+	#model.print_counter()
 
 	
 
