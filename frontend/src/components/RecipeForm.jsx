@@ -74,7 +74,7 @@ function RecipeForm(props) {
 
       <div className="instructions-container">
         <p>Enter all ingredients into the large box above. You can separate them using commas, semicolons, or new lines. Click submit when you're ready.</p>
-        <label>
+        {/*<label>
 					<input
 						type="radio"
 						name="method"
@@ -94,6 +94,7 @@ function RecipeForm(props) {
 					/>
 					Distance
 					</label>
+*/}
       </div>
     </div>
   );
