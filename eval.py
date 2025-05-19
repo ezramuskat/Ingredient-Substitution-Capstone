@@ -119,6 +119,11 @@ class Distance:
 	def generate(self, recipe, restrictions):
 		return self.model.generate_substitutes(recipe, restrictions)
 	
+class Spitback:
+	def __init__(self):
+		print()
+	def generate(self, recipe, restrictions):
+		return recipe
 class LLM:
 	def __init__(self, key:str=None):
 		self.model = LLMModel(groq_api_key=key)
@@ -126,12 +131,6 @@ class LLM:
 	def generate(self, recipe, restrictions):
 		return self.model.call(recipe,restrictions)
 
-	
-class Spitback:
-	def __init__(self):
-		print()
-	def generate(self, recipe, restrictions):
-		return recipe
 
 if __name__ == "__main__":	
     # Quick test
