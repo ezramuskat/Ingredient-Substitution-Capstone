@@ -157,7 +157,7 @@ The **Recipes dataset** is a collection of recipes in the form of lists of ingre
 > **Note:** To load this dataset into a pandas dataframe, you can use the following code: `pd.read_json(filepath, orient='table')`.
 
 ## Presentation
-(Insert link to the presentation here)
+*To be inserted soon.*
 
 ## About Us
 ### Students
@@ -171,7 +171,7 @@ The **Recipes dataset** is a collection of recipes in the form of lists of ingre
 
 
 **Name:** Ezra Muskat  
-**Bio:** <Fill in later>  
+**Bio:** Ezra Muskat is a graduate of Yeshiva University with a Bachelor’s of Science in Computer Science, specializing in AI. He is currently seeking a job in Software Engineering or related fields.  
 **[LinkedIn](https://www.linkedin.com/in/ezra-muskat-b6695721a/)**
 
 ### Supervisor
