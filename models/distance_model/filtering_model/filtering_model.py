@@ -32,7 +32,7 @@ class FilteringModel(object):
     The name of the column in the references DataFrame that contains the tokens to be classified. Default is 'ingredient'.
   embedding_model_name : str, optional
     The name of the model to be used for embedding the tokens. Default is 'sentence-transformers/all-MiniLM-L6-v2'.
-  model : nn.Module|str, optional
+  models : nn.Module|str|list, optional
     The model to be used for classification. If None, a new model will be created. If a string, the model will be loaded from the specified path. Default is None. Generally, this should remain None.
   default_model_path : str, optional
     The path to save the model to. If no path is specified, the model will be saved to the default model path. Default is './filtering_model.pt'. This is also the path where the model will be loaded from if the model parameter is None and a saved model exists at that path.
@@ -89,7 +89,7 @@ class FilteringModel(object):
   >>> from models.distance_model.filtering_model.filtering_model import FilteringModel
   >>> 
   >>> path_to_model = "models/distance_model/filtering_model/filtering_model.pt"
-  >>> filtering_model = FilteringModel(model=path_to_model)
+  >>> filtering_model = FilteringModel(models=path_to_model)
   >>>
   >>> recipe = ["beef", "onion", "garlic", "salt", "pepper", "cheese", "lettuce", "tomato", "bun"]
   >>> filtering_model.filter(recipe)
@@ -205,12 +205,14 @@ class FilteringModel(object):
     return embeddings
   
   #Convert the classified data into a dataframe
-  def __get_classification_df(self, tokens:list, classifications:Tensor, bool_format=True) -> DataFrame:
+  def __get_classification_df(self, tokens:list, classifications:Tensor, column_names:list=None, bool_format=True) -> DataFrame:
     result = DataFrame(classifications)
     result.insert(0,"_",tokens)
     result = result.where(result != 0,'no').where(result != 1,'yes') if bool_format else result
 
-    if self._references is not None:
+    if column_names is not None:
+      result.columns = column_names
+    elif self._references is not None:
       result.columns = self._references.columns
     else:
       result.rename(columns={result.columns[0]: self._token_column_name}, inplace=True)
@@ -575,7 +577,9 @@ class FilteringModel(object):
   #Predict classifications for a list of tokens
   def filter(self, tokens:list, threshold=None, 
   manual_specifications:dict={},
-  print_threshold=False, bool_format:bool=True):
+  print_threshold=False,
+  column_names=["ingredient","vegetarian","vegan","dairy_free","gluten_free"], 
+  bool_format:bool=True):
     '''
     Predicts the classifications for a list of tokens.
 
@@ -626,8 +630,8 @@ class FilteringModel(object):
     
     #Calculate results
     input_embeddings = self.__batch_embed(tokens)
-    classifications = self.__score_and_classify(input_embeddings,threshold,bool_format)
-    classifications_df = self.__get_classification_df(tokens,classifications,bool_format)
+    classifications = self.__score_and_classify(input_embeddings,threshold,bool_format=bool_format)
+    classifications_df = self.__get_classification_df(tokens,classifications,column_names=column_names,bool_format=bool_format)
     self.__apply_modifications(classifications_df,manual_specifications)
     return classifications_df
 
