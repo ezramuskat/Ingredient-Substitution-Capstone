@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from models.heuristic_model import heuristic_model as hm
 from models.distance_model.integrated_model import DistanceModel
+from models.llm_model.llm_model import LLMModel
 #NOTE: these two need to be changed when we move things to be more centered
 #sourced from https://huggingface.co/datasets/lishuyang/recipepairs
 RECIPE_PATH = 'data_sources/recipepairs/recipes.parquet'
@@ -117,6 +118,14 @@ class Distance:
 		self.model = DistanceModel(retrain_filtering_model=True)
 	def generate(self, recipe, restrictions):
 		return self.model.generate_substitutes(recipe, restrictions)
+	
+class LLM:
+	def __init__(self, key:str=None):
+		self.model = LLMModel(groq_api_key=key)
+
+	def generate(self, recipe, restrictions):
+		return self.model.call(recipe,restrictions)
+
 	
 class Spitback:
 	def __init__(self):
